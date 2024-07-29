@@ -195,7 +195,7 @@ int handle_bdev_mount_event(const char *dir_name, int follow_flags,
 #endif //LINUX_VERSION_CODE
         if (ret) {
                 LOG_DEBUG("error finding path");
-                goto out;
+                goto out_nopath;
         }
 
         LOG_DEBUG("path->dentry: %s, path->mnt->mnt_root: %s", path.dentry->d_name.name, path.mnt->mnt_root->d_name.name);
@@ -229,6 +229,7 @@ int handle_bdev_mount_event(const char *dir_name, int follow_flags,
         return ret;
 out:
         path_put(&path);
+out_nopath:
         *idx_out = 0;
         return ret;
 }
