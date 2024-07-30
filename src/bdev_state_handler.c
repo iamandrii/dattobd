@@ -194,7 +194,7 @@ int handle_bdev_mount_event(const char *dir_name, int follow_flags,
         ret = user_path_at(AT_FDCWD, dir_name, lookup_flags, &path);
 #endif //LINUX_VERSION_CODE
         if (ret) {
-                LOG_DEBUG("error finding path");
+                LOG_DEBUG("error finding path, %d", ret);
                 goto out_nopath;
         }
 
