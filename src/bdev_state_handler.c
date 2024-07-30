@@ -198,7 +198,7 @@ int handle_bdev_mount_event(const char *dir_name, int follow_flags,
                 goto out_nopath;
         }
 
-        LOG_DEBUG("path->dentry: %s, path->mnt->mnt_root: %s", path.dentry->d_name.name, path.mnt->mnt_root->d_name.name);
+        LOG_DEBUG("path->dentry: %s, path->mnt->mnt_root: %s, dir_name: %s", path.dentry->d_name.name, path.mnt->mnt_root->d_name.name, dir_name);
 
         if (path.dentry != path.mnt->mnt_root) {
                 // path specified isn't a mount point
