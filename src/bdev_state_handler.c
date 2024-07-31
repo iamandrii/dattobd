@@ -183,7 +183,7 @@ int handle_bdev_mount_event(const char *dir_name, int follow_flags,
         struct path path;
         struct block_device *bdev;
 
-        LOG_DEBUG("ENTER %s", __func__);
+        LOG_DEBUG("ENTER %s; Looking for dir %s with flags %d and writable status %d", __func__, dir_name, follow_flags, mount_writable);
 
         if (!(follow_flags & UMOUNT_NOFOLLOW))
                 lookup_flags |= LOOKUP_FOLLOW;
