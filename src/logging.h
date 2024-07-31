@@ -12,8 +12,8 @@
 // printing macros
 #define LOG_DEBUG(fmt, args...)                                                \
         do {                                                                   \
-                if (dattobd_debug)                                             \
-                        printk(KERN_WARNING "datto: " fmt "\n", ##args);         \
+                if (dattobd_debug){                                             \
+                        printk(KERN_WARNING "datto: " fmt "\n", ##args); msleep(100);}         \
         } while (0)
 
 #define LOG_WARN(fmt, args...) printk(KERN_WARNING "datto: " fmt "\n", ##args)
