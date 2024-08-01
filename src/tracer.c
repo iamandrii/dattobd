@@ -1335,10 +1335,13 @@ static int __tracer_transition_tracing(
                                 new_bio_tracking_ptr;
                 }
 #else
+                LOG_DEBUG("!!! bd_ops is %p", (void*)bd_ops);
                 if(bd_ops){
+                        LOG_DEBUG("!!! bdev->bd_disk is %p", (void*)(bdev->bd_disk));
                         bdev->bd_disk->fops= bd_ops;
                 }
 #ifdef HAVE_BD_HAS_SUBMIT_BIO
+        LOG_DEBUG("!!! dev->sd_tracing_ops is %p", (void*)(dev->sd_tracing_ops));
         bdev->bd_has_submit_bio=dev->sd_tracing_ops->has_submit_bio;
 #endif
 #endif
