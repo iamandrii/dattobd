@@ -1344,7 +1344,7 @@ static int __tracer_transition_tracing(
                 // LOG_DEBUG("!!!? dev is %p", (void*)(dev));
                 // LOG_DEBUG("!!!? dev->sd_tracing_ops is %p", (void*)(dev->sd_tracing_ops));
                 // bdev->bd_has_submit_bio=dev->sd_tracing_ops->has_submit_bio;
-                bdev->bd_has_submit_bio=(*dev_ptr)->sd_tracing_ops->has_submit_bio
+                bdev->bd_has_submit_bio=(*dev_ptr)->sd_tracing_ops->has_submit_bio;
 #endif
 #endif
                 *dev_ptr = dev;
