@@ -7,7 +7,7 @@
 #include "blkdev.h"
 #include "logging.h"
 
-#if !defined HAVE_BLKDEV_GET_BY_PATH && !defined HAVE_BLKDEV_GET_BY_PATH_4
+#if !defined HAVE_BLKDEV_GET_BY_PATH && !defined HAVE_BLKDEV_GET_BY_PATH_4 && !defined HAVE_BDEV_OPEN_BY_PATH
 
 /**
  * dattobd_lookup_bdev() - Looks up the inode associated with the path, verifies
@@ -93,28 +93,44 @@ static struct block_device *_blkdev_get_by_path(const char *pathname, fmode_t mo
 /**
  * dattodb_blkdev_by_path() - Fetches the @block_device struct associated with the
  * @path. This function uses different methods based on available kernel functions
- * to retrieve the block device.
+ * to retrieve the block device. Returns @bdev_handle struct which contains
+ * information about @block_device and @holder. Made to be in compliance with kernel
+ * version 6.8+ standard.
  *
  * @path: the path name of a block special file.
  * @mode: The mode used to open the block special file, likely just FMODE_READ.
  * @holder: unused.
  *
  * Return:
- * On success the @block_device structure otherwise an error created via
+ * On success the @bdev_handle structure otherwise an error created via
  * ERR_PTR().
  */
-struct block_device *dattodb_blkdev_by_path(const char *path, fmode_t mode,
+struct bdev_handle *dattodb_blkdev_by_path(const char *path, fmode_t mode,
                                         void *holder)
 {
-#if defined HAVE_BLKDEV_GET_BY_PATH_4
-        return blkdev_get_by_path(path, mode, holder, NULL);
-
-#elif defined HAVE_BLKDEV_GET_BY_PATH
-        return blkdev_get_by_path(path, mode, holder);
-
+#if defined HAVE_BDEV_OPEN_BY_PATH
+        return bdev_open_by_path(path, mode, holder, NULL);
 #else
-        return _blkdev_get_by_path(path, mode, holder);
+        struct bdev_handle *bh = kmalloc(sizeof(struct bdev_handle), GFP_KERNEL);
+        if(IS_ERR_OR_NULL(bh)){
+                return ERR_PTR(-ENOMEM);
+        }
+#if defined HAVE_BLKDEV_GET_BY_PATH_4
+        bh->bdev = blkdev_get_by_path(path, mode, holder, NULL);
+#elif defined HAVE_BLKDEV_GET_BY_PATH
+        bh->bdev = blkdev_get_by_path(path, mode, holder);
+#else
+        bh->bdev = _blkdev_get_by_path(path, mode, holder);
 #endif
+        if(unlikely(IS_ERR_OR_NULL(bh->bdev))){
+                void* error = bh->bdev;
+                kfree(bh);
+                return error;
+        }
+        bh->holder = holder;
+        return bh;
+
+#endif //HAVE_BDEV_OPEN_BY_PATH
 }
 
 /**
@@ -169,22 +185,27 @@ void dattobd_drop_super(struct super_block *sb)
  * This function performs the appropriate action based on the available
  * kernel functions to release block device.
  *
- * @bd: block device structure pointer to be released.
+ * @bh: bdev_handle structure pointer to be released.
  *
  * Return:
  * void.
  */
-void dattobd_blkdev_put(struct block_device *bd) 
+void dattobd_blkdev_put(struct bdev_handle *bh) 
 {
+#if defined HAVE_BDEV_RELEASE
+        return bdev_release(bh);
+#else
+        struct block_device* bd = bh->bdev;
+        kfree(bh);
 #if defined HAVE_BLKDEV_PUT_1
         return blkdev_put(bd);
-
 #elif defined HAVE_BLKDEV_PUT_2
-        return blkdev_put(bd,NULL);
-
+        return blkdev_put(bd, NULL);
 #else
         return blkdev_put(bd, FMODE_READ);
 #endif
+
+#endif //HAVE_BDEV_RELEASE
 }
 
 /**
