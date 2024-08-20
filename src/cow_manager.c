@@ -957,7 +957,7 @@ retry:
                 if(cm->auto_expand){
                         kstatfs_ret = 0;
                         if(cm->dev && cm->dev->sd_base_dev){
-                                kstatfs_ret = dattobd_get_kstatfs(cm->dev->sd_base_dev, &kstatfs);
+                                kstatfs_ret = dattobd_get_kstatfs(cm->dev->sd_base_dev->bdev, &kstatfs);
                         }
 
                         if(!kstatfs_ret){

@@ -25,7 +25,7 @@
 
 // returns true if tracing struct's base device queue matches that of bio
 #define tracer_queue_matches_bio(dev, bio)                                     \
-        (bdev_get_queue((dev)->sd_base_dev) == dattobd_bio_get_queue(bio))
+        (bdev_get_queue((dev)->sd_base_dev->bdev) == dattobd_bio_get_queue(bio))
 
 // returns true if tracing struct's sector range matches the sector of the bio
 #define tracer_sector_matches_bio(dev, bio)                                    \

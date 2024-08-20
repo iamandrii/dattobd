@@ -16,6 +16,16 @@ struct block_device;
 #define bdev_whole(bdev) ((bdev)->bd_contains)
 #endif
 
+#ifndef HAVE_BDEV_HANDLE
+struct bdev_handle{
+    struct block_device* bdev;
+    void* holder;
+    // blk_mode_t mode; is ommited as we don't need that.
+};
+#else
+// Using bdev_handle from kernel.
+#endif
+
 #ifndef HAVE_HD_STRUCT
 //#if LINUX_VERSION_CODE < KERNEL_VERSION(5,11,0)
 #define dattobd_bdev_size(bdev) (bdev_nr_sectors(bdev))
@@ -27,14 +37,14 @@ struct block_device;
 #endif
 
 
-struct block_device *dattodb_blkdev_by_path(const char *path, fmode_t mode,
+struct bdev_handle *dattodb_blkdev_by_path(const char *path, fmode_t mode,
                                         void *holder);
 
 struct super_block *dattobd_get_super(struct block_device * bd);
 
 void dattobd_drop_super(struct super_block *sb);
 
-void dattobd_blkdev_put(struct block_device *bd);
+void dattobd_blkdev_put(struct bdev_handle *bd);
 
 int dattobd_get_start_sect_by_gendisk_for_bio(struct gendisk* gd, u8 partno, sector_t* result);
 
