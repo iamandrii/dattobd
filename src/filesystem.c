@@ -1091,7 +1091,7 @@ int file_write_block(struct snap_device* dev, const void* block, size_t offset, 
 
         ret = 0;
 	bs = dev_bioset(dev);
-	bdev = dev->sd_base_dev;
+	bdev = dev->sd_base_dev->bdev;
 	sectors_processed = 0;
 
 write_bio: 
@@ -1198,7 +1198,7 @@ int file_read_block(struct snap_device* dev, void* block, size_t offset, size_t 
 
 	ret = 0;
 	bs = dev_bioset(dev);
-	bdev = dev->sd_base_dev;
+	bdev = dev->sd_base_dev->bdev;
 	sectors_processed = 0;
 WARN_ON(len > SECTORS_PER_BLOCK);
 

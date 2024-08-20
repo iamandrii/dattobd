@@ -55,7 +55,7 @@ struct snap_device {
         sector_t sd_size; // size of device in sectors
         struct request_queue *sd_queue; // snap device request queue
         struct gendisk *sd_gd; // snap device gendisk
-        struct block_device *sd_base_dev; // device being snapshot
+        struct bdev_handle *sd_base_dev; // device being snapshot
         char *sd_bdev_path; // base device file path
         struct cow_manager *sd_cow; // cow manager
         char *sd_cow_path; // cow file path
