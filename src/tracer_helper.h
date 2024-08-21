@@ -11,6 +11,7 @@
 #include "hints.h"
 #include "includes.h"
 #include "module_control.h"
+#include "blkdev.h"
 
 // macro for iterating over snap_devices (requires a null check on dev)
 #define tracer_for_each(dev, i)                                                \

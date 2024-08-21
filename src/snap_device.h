@@ -13,6 +13,7 @@
 #include "includes.h"
 #include "submit_bio.h"
 #include "sset_queue.h"
+#include "blkdev.h"
 
 // macros for defining the state of a tracing struct (bit offsets)
 #define SNAPSHOT 0
