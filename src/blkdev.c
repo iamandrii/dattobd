@@ -6,6 +6,7 @@
 
 #include "blkdev.h"
 #include "logging.h"
+#include <linux/version.h>
 
 #if !defined HAVE_BLKDEV_GET_BY_PATH && !defined HAVE_BLKDEV_GET_BY_PATH_4 && !defined HAVE_BDEV_OPEN_BY_PATH
 
@@ -150,7 +151,8 @@ struct super_block *dattobd_get_super(struct block_device * bd)
 
 #elif defined HAVE_GET_SUPER
         return get_super(bdev);
-
+#elif LINUX_VERSION_CODE >= KERNEL_VERSION(6,6,0)
+        return (struct super_block*)(bd -> bd_holder);
 #else
         struct super_block* (*get_active_superblock)(struct block_device*)= (GET_ACTIVE_SUPER_ADDR != 0) ? (struct super_block* (*)(struct block_device*))(GET_ACTIVE_SUPER_ADDR +(long long)(((void*)kfree)-(void*)KFREE_ADDR)):NULL;
         return get_active_superblock(bd);
@@ -174,7 +176,8 @@ void dattobd_drop_super(struct super_block *sb)
 
 #elif defined HAVE_GET_SUPER
         return drop_super(sb);
-
+#elif LINUX_VERSION_CODE >= KERNEL_VERSION(6,6,0)
+        return;
 #else
         return;
 #endif
