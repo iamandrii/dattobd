@@ -706,7 +706,7 @@ static void __tracer_destroy_base_dev(struct snap_device *dev)
                 dev->sd_bdev_path = NULL;
         }
 
-        if (dev->sd_base_dev->bdev) {
+        if (dev->sd_base_dev) {
                 LOG_DEBUG("freeing base block device");
                 dattobd_blkdev_put(dev->sd_base_dev);
                 dev->sd_base_dev = NULL;
