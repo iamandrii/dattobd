@@ -1023,6 +1023,9 @@ void dattobd_inode_unlock(struct inode *inode)
 struct kmem_cache **vm_area_cache = (VM_AREA_CACHEP_ADDR != 0) ?
 	(struct kmem_cache **) (VM_AREA_CACHEP_ADDR + (long long)(((void *)kfree) - (void *)KFREE_ADDR)) : NULL;
 
+struct kmem_cache **vma_lock_cache = (VMA_LOCK_CACHEP_ADDR != 0) ?
+	(struct kmem_cache **) (VMA_LOCK_CACHEP_ADDR + (long long)(((void *)kfree) - (void *)KFREE_ADDR)) : NULL;
+
 struct vm_area_struct* dattobd_vm_area_allocate(struct mm_struct* mm)
 {
         struct vm_area_struct *vma;
@@ -1037,6 +1040,17 @@ struct vm_area_struct* dattobd_vm_area_allocate(struct mm_struct* mm)
 		LOG_ERROR(-ENOMEM, "kmem_cache_zalloc() failed");
 		return NULL;
 	}
+
+#ifdef HAVE_VM_AREA_STRUCT_VM_LOCK
+        vma->vm_lock = kmem_cache_zalloc(*vma_lock_cache, GFP_KERNEL);
+        if (!vma->vm_lock) {
+                LOG_ERROR(-ENOMEM, "kmem_cache_zalloc() failed");
+                kmem_cache_free(*vm_area_cache, vma);
+                return NULL;
+        }
+        init_rwsem(&vma->vm_lock->lock);
+        vma->vm_lock_seq = -1;
+#endif
 
 	vma->vm_mm = mm;
 	vma->vm_ops = &dummy_vm_ops;
