@@ -22,3 +22,7 @@ __pycache__/
 pkgbuild/
 
 *kdev4*
+
+
+# VSCode
+.vscode/
