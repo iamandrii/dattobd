@@ -1058,7 +1058,6 @@ int cow_get_file_extents(struct snap_device* dev, struct file* filp)
 
         ret = insert_vm_struct(task->mm, vma);
         if (ret < 0) {
-		ret = -EINVAL;
 		LOG_ERROR(ret, "insert_vm_struct() failed");
 		dattobd_vm_area_free(vma);
 		dattobd_mm_unlock(task->mm);
@@ -1067,7 +1066,6 @@ int cow_get_file_extents(struct snap_device* dev, struct file* filp)
 
         pg = alloc_pages(GFP_USER, get_order(cow_ext_buf_size));
 	if (!pg) {
-		ret = -ENOMEM;
 		LOG_ERROR(ret, "alloc_page() failed");
 		dattobd_vm_area_free(vma);
 		dattobd_mm_unlock(task->mm);
