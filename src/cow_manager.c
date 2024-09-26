@@ -683,14 +683,17 @@ int cow_init(struct snap_device *dev, const char *path, uint64_t elements, unsig
         cm->flags = 0;
         cm->allocated_sects = 0;
         cm->file_max = file_max;
-        cm->sect_size = sect_size;
+        cm->sect_size = sect_size; //how many elements(sectors) can section hold (in datastore); = 4096
         cm->seqid = seqid;
-        cm->log_sect_pages = get_order(sect_size * 8);
+        // get_order(x) = ceil[log2(x / PAGE_SIZE)]
+        cm->log_sect_pages = get_order(sect_size * 8); //PAGE_SIZE = 4096 bytes; log2[pages in section in index]; = log2(4096*8/4096) = 3
+        // this implies that section uses 2^15 B in index => sector consists of 8 B of metadata in index
+        // means how many pages do we need to store metadata of one section in index
         cm->total_sects =
-                NUM_SEGMENTS(elements, cm->log_sect_pages + PAGE_SHIFT - 3);
+                NUM_SEGMENTS(elements, cm->log_sect_pages + PAGE_SHIFT - 3);  //total sections to store all of the sectors; = ceil(elements / 4096)
         cm->allowed_sects =
-                __cow_calculate_allowed_sects(cache_size, cm->total_sects);
-        cm->data_offset = COW_HEADER_SIZE + (cm->total_sects * (sect_size * 8));
+                __cow_calculate_allowed_sects(cache_size, cm->total_sects); //num of sections that can fit in cache apart from index
+        cm->data_offset = COW_HEADER_SIZE + (cm->total_sects * (sect_size * 8)); // data offset in bytes, equals 4096 + [total_sects*4096*8](index size)
         cm->curr_pos = cm->data_offset / COW_BLOCK_SIZE;
         cm->dev = dev;
 
@@ -844,6 +847,7 @@ int __cow_write_mapping(struct cow_manager *cm, uint64_t pos, uint64_t val)
         int ret;
         uint64_t sect_idx = pos;
         unsigned long sect_pos = do_div(sect_idx, cm->sect_size);
+        //do_div modifies sect_idx to be the quotient of pos divided by cm->sect_size and returns the remainder
 
         cm->sects[sect_idx].usage++;
 
