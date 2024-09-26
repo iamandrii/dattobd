@@ -1139,3 +1139,20 @@ out:
 	__free_pages(pg, get_order(cow_ext_buf_size));
 	return ret;
 }
+
+
+int cow_extend_datastore(struct snap_device* dev, uint64_t append_size){
+        int ret;
+        struct cow_manager *cm = dev->sd_cow;
+        uint64_t new_file_max = cm->file_max + append_size;
+        uint64_t curr_max = cm->file_max;
+
+        ret = file_allocate(cm->filp, cm->dev, cm->file_max, new_file_max);
+        if (ret){
+                LOG_ERROR(ret, "unable to increase cow file size");
+                return ret;
+        }
+
+        cm->file_max = new_file_max;
+        return 0;
+}
