@@ -16,6 +16,7 @@
 #include "tracer.h"
 #include "tracer_helper.h"
 #include "userspace_copy_helpers.h"
+#include "cow_manager.h"
 
 #ifdef HAVE_UAPI_MOUNT_H
 #include <uapi/linux/mount.h>
@@ -463,6 +464,7 @@ long ctrl_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
         struct dattobd_info *info = NULL;
         unsigned int minor = 0;
         unsigned long fallocated_space = 0, cache_size = 0;
+        struct extend_cow_params *extend_params = NULL;
 
         LOG_DEBUG("ioctl command received: %i", cmd);
         mutex_lock(&ioctl_mutex);
@@ -610,6 +612,18 @@ long ctrl_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
                         LOG_ERROR(ret, "error copying minor to user space");
                         break;
                 }
+
+                break;
+        case IOCTL_EXTEND_COW:
+                // get params from user space
+                extend_params = kmalloc(sizeof(struct extend_cow_params), GFP_KERNEL);
+                copy_from_user(extend_params, (struct extend_cow_params __user *)arg, sizeof(struct extend_cow_params));
+                if (ret)
+                        break;
+
+                ret = cow_extend_datastore(snap_devices[extend_params->minor], extend_params->size);
+                if (ret)
+                        break;
 
                 break;
         default:

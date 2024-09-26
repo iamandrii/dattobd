@@ -154,3 +154,18 @@ int dattobd_get_free_minor(void){
 	if(!ret) return minor;
 	return ret;
 }
+
+int dattobd_extend_cow(unsigned int minor, unsigned long size){
+	int fd, ret;
+	struct extend_cow_params params;
+	params.minor=minor;
+	params.size=size;
+
+	fd = open("/dev/datto-ctl", O_RDONLY);
+	if(fd < 0) return -1;
+
+	ret = ioctl(fd, IOCTL_EXTEND_COW, &params);
+
+	close(fd);
+	return ret;
+}
