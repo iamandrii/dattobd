@@ -1141,7 +1141,7 @@ out:
 }
 
 
-int cow_extend_datastore(struct snap_device* dev, uint64_t append_size){
+int cow_expand_datastore(struct snap_device* dev, uint64_t append_size){
         int ret;
         struct cow_manager *cm = dev->sd_cow;
         uint64_t curr_max = cm->file_max;
@@ -1150,11 +1150,11 @@ int cow_extend_datastore(struct snap_device* dev, uint64_t append_size){
         ret = file_allocate(cm->filp, cm->dev, cm->file_max, append_size, &actual);
 
         if(actual != append_size){
-                LOG_WARN("cow file size not extended to requested size (req: %llu, act: %llu)", append_size, actual);
+                LOG_WARN("cow file was not expanded to requested size (req: %llu, act: %llu)", append_size, actual);
         }
 
         if (ret && !actual){
-                LOG_ERROR(ret, "unable to increase cow file size");
+                LOG_ERROR(ret, "unable to expand cow file");
                 return ret;
         }
 

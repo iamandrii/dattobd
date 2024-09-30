@@ -23,7 +23,7 @@ static void print_help(int status){
 	printf("\tdbdctl transition-to-incremental <minor>\n");
 	printf("\tdbdctl transition-to-snapshot [-f fallocate] <cow file> <minor>\n");
 	printf("\tdbdctl reconfigure [-c <cache size>] <minor>\n");
-	printf("\tdbdctl extend-cow <minor> <size>\n");
+	printf("\tdbdctl expand-cow-file <minor> <size>\n");
 	printf("\tdbdctl help\n\n");
 	printf("<cow file> should be specified as an absolute path.\n");
 	printf("cache size should be provided in bytes, and fallocate should be provided in megabytes.\n");
@@ -316,7 +316,7 @@ error:
 	return 0;
 }
 
-static int handle_cow_extend(int argc, char **argv){
+static int handle_expand_cow_file(int argc, char **argv){
 	int ret;
 	unsigned int minor;
 	unsigned long size;
@@ -332,10 +332,10 @@ static int handle_cow_extend(int argc, char **argv){
 	ret = parse_ul(argv[2], &size);
 	if(ret) goto error;
 
-	return dattobd_extend_cow(minor, size);
+	return dattobd_expand_cow_file(minor, size);
 
 error:
-	perror("error interpreting destroy parameters");
+	perror("error interpreting expand parameters");
 	print_help(-1);
 	return 0;
 }
@@ -360,7 +360,7 @@ int main(int argc, char **argv){
 	else if(!strcmp(argv[1], "transition-to-incremental")) ret = handle_transition_inc(argc - 1, argv + 1);
 	else if(!strcmp(argv[1], "transition-to-snapshot")) ret = handle_transition_snap(argc - 1, argv + 1);
 	else if(!strcmp(argv[1], "reconfigure")) ret = handle_reconfigure(argc - 1, argv + 1);
-	else if(!strcmp(argv[1], "extend-cow")) ret = handle_cow_extend(argc - 1, argv + 1);
+	else if(!strcmp(argv[1], "expand-cow-file")) ret = handle_expand_cow_file(argc - 1, argv + 1);
 	else if(!strcmp(argv[1], "help")) print_help(0);
 	else print_help(-1);
 

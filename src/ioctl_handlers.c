@@ -464,7 +464,7 @@ long ctrl_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
         struct dattobd_info *info = NULL;
         unsigned int minor = 0;
         unsigned long fallocated_space = 0, cache_size = 0;
-        struct extend_cow_params *extend_params = NULL;
+        struct expand_cow_file_params *expand_params = NULL;
 
         LOG_DEBUG("ioctl command received: %i", cmd);
         mutex_lock(&ioctl_mutex);
@@ -614,17 +614,26 @@ long ctrl_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
                 }
 
                 break;
-        case IOCTL_EXTEND_COW:
+        case IOCTL_EXPAND_COW_FILE:
                 // get params from user space
-                extend_params = kmalloc(sizeof(struct extend_cow_params), GFP_KERNEL);
-                copy_from_user(extend_params, (struct extend_cow_params __user *)arg, sizeof(struct extend_cow_params));
-                if (ret)
+                expand_params = kmalloc(sizeof(struct expand_cow_file_params), GFP_KERNEL);
+                ret = copy_from_user(expand_params, (struct expand_cow_file_params __user *)arg, sizeof(struct expand_cow_file_params));
+                if (ret){
+                        ret = -EFAULT;
+                        LOG_ERROR(ret, "error copying expand_cow_file_params from user space");
                         break;
-
-                ret = cow_extend_datastore(snap_devices[extend_params->minor], extend_params->size);
-                if (ret)
+                }
+                if(expand_params->minor < lowest_minor || expand_params->minor > highest_minor){
+                        ret = -EINVAL;
+                        LOG_ERROR(ret, "minor out of range");
                         break;
+                }
 
+                ret = cow_expand_datastore(snap_devices[expand_params->minor], expand_params->size);
+                if (ret){
+                        LOG_ERROR(ret, "error expanding cow file");
+                        break;
+                }
                 break;
         default:
                 ret = -EINVAL;
