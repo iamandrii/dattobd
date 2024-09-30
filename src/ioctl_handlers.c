@@ -392,6 +392,57 @@ error:
 }
 
 /**
+ * ioctl_expand_cow_file() - Expands cow file by the specified size.
+ * @minor: An allocated device minor number.
+ * @size: The size in bytes to expand the cow file by.
+ *
+ * Return:
+ * * 0 - successful.
+ * * !0 - errno indicating the error.
+ */
+int ioctl_expand_cow_file(unsigned int minor, unsigned long size)
+{
+        int ret;
+        struct snap_device *dev;
+
+        LOG_DEBUG("received expand cow file ioctl - %u : %lu", minor, size);
+
+        // verify that the minor number is valid
+        ret = verify_minor_in_use_not_busy(minor);
+        if (ret)
+                goto error;
+
+        dev = snap_devices[minor];
+
+        // check that the device is not in the fail state
+        if (tracer_read_fail_state(dev)) {
+                ret = -EINVAL;
+                LOG_ERROR(ret, "device specified is in the fail state");
+                goto error;
+        }
+
+        // check that tracer is in active snapshot state
+        if (!test_bit(SNAPSHOT, &dev->sd_state) ||
+            !test_bit(ACTIVE, &dev->sd_state)) {
+                ret = -EINVAL;
+                LOG_ERROR(ret,
+                          "device specified is not in active snapshot mode");
+                goto error;
+        }
+
+        ret = cow_expand_datastore(dev, size);
+
+        if(ret)
+                goto error;
+
+        return 0;
+
+error:
+        LOG_ERROR(ret, "error during expand cow file ioctl handler");
+        return ret;
+}
+
+/**
  * ioctl_dattobd_info() - Stores relevant, current &struct snap_device state
  *                        in @info.
  *
@@ -623,17 +674,12 @@ long ctrl_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
                         LOG_ERROR(ret, "error copying expand_cow_file_params from user space");
                         break;
                 }
-                if(expand_params->minor < lowest_minor || expand_params->minor > highest_minor){
-                        ret = -EINVAL;
-                        LOG_ERROR(ret, "minor out of range");
+
+                ret = ioctl_expand_cow_file(expand_params->minor, expand_params->size);
+                if (ret){
                         break;
                 }
 
-                ret = cow_expand_datastore(snap_devices[expand_params->minor], expand_params->size);
-                if (ret){
-                        LOG_ERROR(ret, "error expanding cow file");
-                        break;
-                }
                 break;
         default:
                 ret = -EINVAL;
