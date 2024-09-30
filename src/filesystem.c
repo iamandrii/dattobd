@@ -129,36 +129,46 @@ static ssize_t dattobd_kernel_write(struct file *filp,struct snap_device* dev, c
  * @buf: Input/output buffer for write/read, respectively.
  * @offset: Byte offset of the first sequential access within @filp.
  * @len: The number of bytes in the transfer.
+ * @done: Pointer to store the number of bytes transferred or NULL if not needed.
  *
  * Return:
  * * 0 - success
  * * !0 - errno indicating the error
  */
 int file_io(struct file *filp, struct snap_device* dev, int is_write, void *buf, sector_t offset,
-            unsigned long len)
+            unsigned long len, unsigned long *done)
 {
         ssize_t ret;
         loff_t off = (loff_t)offset;
+
+        if(unlikely(done))
+                *done = 0;
 
         if (is_write)
                 ret = dattobd_kernel_write(filp, dev, buf, len, &off);
         else
                 ret = dattobd_kernel_read(filp, dev, buf, len, &off);
 
-        if (ret < 0) {
+        if (unlikely(ret < 0)) {
                 LOG_ERROR((int)ret, "error performing file '%s': %llu, %lu",
                           (is_write) ? "write" : "read",
                           (unsigned long long)offset, len);
                 return ret;
-        } else if (ret != len) {
+        }
+
+        if(unlikely(done))
+                *done = ret;
+
+        if (unlikely(ret != len)) {
                 LOG_ERROR(-EIO, "invalid file '%s' size: %llu, %lu, %lu",
                           (is_write) ? "write" : "read",
                           (unsigned long long)offset, len, (unsigned long)ret);
                 ret = -EIO;
-                return ret;
+        } else {
+                ret = 0;
         }
 
-        return 0;
+        return ret;
 }
 
 /**
@@ -801,18 +811,20 @@ static int real_fallocate(struct file *f, uint64_t offset, uint64_t length)
  * @cm: A &struct cow_manager object.
  * @offset: The offset into @f indicating the start of the allocation.
  * @length: The number of byte to allocate starting at @offset.
+ * @done: Pointer to store the number of bytes allocated or NULL if not needed.
  *
  * Return:
  * * 0 - success
  * * !0 - errno indicating the error.
  */
-int file_allocate(struct file *filp, struct snap_device* dev,  uint64_t offset, uint64_t length)
+int file_allocate(struct file *filp, struct snap_device* dev,  uint64_t offset, uint64_t length, uint64_t *done)
 {
         int ret = 0;
         char *page_buf = NULL;
         uint64_t i, write_count;
         char *abs_path = NULL;
         int abs_path_len;
+        unsigned long cur_done;
 
         file_get_absolute_pathname(filp, &abs_path, &abs_path_len);
 
@@ -827,10 +839,15 @@ int file_allocate(struct file *filp, struct snap_device* dev,  uint64_t offset, 
         // may write up to a page too much, ok for our use case
         write_count = NUM_SEGMENTS(length, PAGE_SHIFT);
 
+        if(done)
+                *done = 0;
+
         // if not page aligned, write zeros to that point
         if (offset % PAGE_SIZE != 0) {
                 ret = file_write(filp, dev, page_buf, offset,
-                                 PAGE_SIZE - (offset % PAGE_SIZE));
+                                 PAGE_SIZE - (offset % PAGE_SIZE), &cur_done);
+                if (done)
+                        *done += cur_done;
                 if (ret)
                         goto error;
 
@@ -840,7 +857,9 @@ int file_allocate(struct file *filp, struct snap_device* dev,  uint64_t offset, 
         // write a page of zeros at a time
         for (i = 0; i < write_count; i++) {
                 ret = file_write(filp, dev, page_buf, offset + (PAGE_SIZE * i),
-                                 PAGE_SIZE);
+                                 PAGE_SIZE, &cur_done);
+                if (done)
+                        *done += cur_done;
                 if (ret)
                         goto error;
         }

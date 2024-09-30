@@ -721,7 +721,7 @@ int cow_init(struct snap_device *dev, const char *path, uint64_t elements, unsig
 
         LOG_DEBUG("allocating cow file (%llu bytes)",
                   (unsigned long long)file_max);
-        ret = file_allocate(cm->filp, cm->dev, 0, file_max);
+        ret = file_allocate(cm->filp, cm->dev, 0, file_max, NULL);
         if (ret)
                 goto error;
 
@@ -1145,13 +1145,19 @@ int cow_extend_datastore(struct snap_device* dev, uint64_t append_size){
         int ret;
         struct cow_manager *cm = dev->sd_cow;
         uint64_t curr_max = cm->file_max;
+        uint64_t actual = 0;
 
-        ret = file_allocate(cm->filp, cm->dev, cm->file_max, append_size);
-        if (ret){
+        ret = file_allocate(cm->filp, cm->dev, cm->file_max, append_size, &actual);
+
+        if(actual != append_size){
+                LOG_WARN("cow file size not extended to requested size (req: %llu, act: %llu)", append_size, actual);
+        }
+
+        if (ret && !actual){
                 LOG_ERROR(ret, "unable to increase cow file size");
                 return ret;
         }
 
-        cm->file_max = cm->file_max + append_size;
+        cm->file_max = cm->file_max + actual;
         return 0;
 }

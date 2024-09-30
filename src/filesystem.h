@@ -11,8 +11,13 @@
 #include "userspace_copy_helpers.h"
 #include "snap_device.h"
 
-#define file_write(filp, dev, buf, offset, len) file_io(filp, dev, 1, buf, offset, len)
-#define file_read(filp, dev, buf, offset, len) file_io(filp, dev, 0, buf, offset, len)
+#define file_read(filp, dev, buf, offset, len) file_io(filp, dev, 0, buf, offset, len, NULL)
+
+#define file_write5(filp, dev, buf, offset, len) file_io(filp, dev, 1, buf, offset, len, NULL)
+#define file_write6(filp, dev, buf, offset, len, done) file_io(filp, dev, 1, buf, offset, len, done)
+
+#define _get_macro(_1,_2,_3,_4,_5,_6,NAME,...) NAME
+#define file_write(...) _get_macro(__VA_ARGS__, file_write6, file_write5)(__VA_ARGS__)
 
 #define file_unlink(filp) __file_unlink(filp, 0, 0)
 #define file_unlink_and_close(filp) __file_unlink(filp, 1, 0)
@@ -69,7 +74,7 @@ typedef mode_t fmode_t;
 #endif
 
 int file_io(struct file *filp, struct snap_device* dev, int is_write, void *buf, sector_t offset,
-            unsigned long len);
+            unsigned long len, unsigned long *done);
 
 void file_close(struct file *f);
 
@@ -96,7 +101,7 @@ int user_mount_pathname_concat(const char __user *user_mount_path,
 
 int file_truncate(struct file *filp, loff_t len);
 
-int file_allocate(struct file *filp, struct snap_device* dev, uint64_t offset, uint64_t length);
+int file_allocate(struct file *filp, struct snap_device* dev, uint64_t offset, uint64_t length, uint64_t *done);
 
 int __file_unlink(struct file *filp, int close, int force);
 
