@@ -767,9 +767,6 @@ int cow_truncate_to_index(struct cow_manager *cm)
         cm->flags |= (1 << COW_INDEX_ONLY);
         int ret = file_truncate(cm->filp, cm->data_offset);
         
-        if(!ret){
-                cm->file_max = cm->data_offset;
-        }
 
         file_lock(cm->filp);
 
