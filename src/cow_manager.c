@@ -761,16 +761,8 @@ error:
 int cow_truncate_to_index(struct cow_manager *cm)
 {
         // truncate the cow file to just the index
-
-        file_unlock(cm->filp);
-
         cm->flags |= (1 << COW_INDEX_ONLY);
-        int ret = file_truncate(cm->filp, cm->data_offset);
-        
-
-        file_lock(cm->filp);
-
-        return ret;
+        return file_truncate(cm->filp, cm->data_offset);
 }
 
 /**
