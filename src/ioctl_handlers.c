@@ -408,7 +408,7 @@ int ioctl_expand_cow_file(unsigned int minor, unsigned long size)
         LOG_DEBUG("received expand cow file ioctl - %u : %lu", minor, size);
 
         // verify that the minor number is valid
-        ret = verify_minor_in_use_not_busy(minor);
+        ret = verify_minor_in_use(minor);
         if (ret)
                 goto error;
 
