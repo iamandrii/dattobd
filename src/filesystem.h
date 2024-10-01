@@ -21,6 +21,7 @@
 #define file_lock(filp) file_switch_lock(filp, true, false)
 #define file_unlock(filp) file_switch_lock(filp, false, false)
 #define file_unlock_mark_dirty(filp) file_switch_lock(filp, false, true)
+#define inode_is_locked(inode) ( (inode->i_flags) & S_IMMUTABLE)
 
 #ifndef HAVE_STRUCT_PATH
 //#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,20)

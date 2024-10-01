@@ -885,6 +885,10 @@ int __file_unlink(struct file *filp, int close, int force)
         struct dentry *file_dentry = dattobd_get_dentry(filp);
         struct vfsmount *mnt = dattobd_get_mnt(filp);
 
+        if(file_dentry->d_inode && inode_is_locked(file_dentry->d_inode)){
+                file_unlock(filp);
+        }
+
         if (d_unlinked(file_dentry)) {
                 if (close)
                         file_close(filp);
