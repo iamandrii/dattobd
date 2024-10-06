@@ -41,7 +41,7 @@ struct cow_section {
 };
 
 struct cow_manager {
-        struct file *filp; // the file the cow manager is writing to
+        struct dattobd_mutable_file *dfilp; // the file the cow manager is writing to
         uint32_t flags; // flags representing current state of cow manager
         uint64_t curr_pos; // current write head position
         uint64_t data_offset; // starting offset of data

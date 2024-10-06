@@ -667,7 +667,7 @@ static int __tracer_setup_cow(struct snap_device *dev,
         }
 
         // verify that file is on block device
-        if (!file_is_on_bdev(dev->sd_cow->filp, bdev)) {
+        if (!file_is_on_bdev(dev->sd_cow->dfilp->filp, bdev)) {
                 ret = -EINVAL;
 #ifdef HAVE_BDEVNAME
                 LOG_ERROR(ret, "'%s' is not on '%s'", cow_path, bdev_name);
@@ -679,7 +679,7 @@ static int __tracer_setup_cow(struct snap_device *dev,
 
         // find the cow file's inode number
         LOG_DEBUG("finding cow file inode");
-        dev->sd_cow_inode = dattobd_get_dentry(dev->sd_cow->filp)->d_inode;
+        dev->sd_cow_inode = dev->sd_cow->dfilp->inode;
 
         return 0;
 
@@ -885,20 +885,20 @@ static void __tracer_destroy_cow_path(struct snap_device *dev)
  * __tracer_setup_cow_path() - Sets up the COW file path given a &struct file.
  *
  * @dev: The &struct snap_device object pointer.
- * @cow_file: The &struct file object pointer.
+ * @cow_dfile: A &struct dattobd_mutable_file object pointer.
  *
  * Return:
  * * 0 - success
  * * !0 - errno indicating the error
  */
 static int __tracer_setup_cow_path(struct snap_device *dev,
-                                   const struct file *cow_file)
+                                   const struct dattobd_mutable_file *cow_dfile)
 {
         int ret;
 
         // get the pathname of the cow file (relative to the mountpoint)
         LOG_DEBUG("getting relative pathname of cow file");
-        ret = dentry_get_relative_pathname(dattobd_get_dentry(cow_file),
+        ret = dentry_get_relative_pathname(cow_dfile->dentry,
                                            &dev->sd_cow_path, NULL);
         if (ret)
                 goto error;
@@ -1884,7 +1884,7 @@ int tracer_setup_active_snap(struct snap_device *dev, unsigned int minor,
                 goto error;
 
         // setup the cow path
-        ret = __tracer_setup_cow_path(dev, dev->sd_cow->filp);
+        ret = __tracer_setup_cow_path(dev, dev->sd_cow->dfilp);
         if (ret)
                 goto error;
 
@@ -2002,7 +2002,7 @@ int tracer_active_snap_to_inc(struct snap_device *old_dev)
         ret = cow_truncate_to_index(dev->sd_cow);
         if (ret) {
                 // not a critical error, we can just print a warning
-                file_get_absolute_pathname(dev->sd_cow->filp, &abs_path,
+                file_get_absolute_pathname(dev->sd_cow->dfilp->filp, &abs_path,
                                            &abs_path_len);
                 if (!abs_path) {
                         LOG_WARN("warning: cow file truncation failed, "
@@ -2075,7 +2075,7 @@ int tracer_active_inc_to_snap(struct snap_device *old_dev, const char *cow_path,
                 goto error;
 
         // setup the cow path
-        ret = __tracer_setup_cow_path(dev, dev->sd_cow->filp);
+        ret = __tracer_setup_cow_path(dev, dev->sd_cow->dfilp);
         if (ret)
                 goto error;
 
@@ -2247,7 +2247,7 @@ void __tracer_unverified_snap_to_active(struct snap_device *dev,
                 goto error;
 
         // setup the cow path
-        ret = __tracer_setup_cow_path(dev, dev->sd_cow->filp);
+        ret = __tracer_setup_cow_path(dev, dev->sd_cow->dfilp);
         if (ret)
                 goto error;
 
@@ -2343,7 +2343,7 @@ void __tracer_unverified_inc_to_active(struct snap_device *dev,
                 goto error;
 
         // setup the cow path
-        ret = __tracer_setup_cow_path(dev, dev->sd_cow->filp);
+        ret = __tracer_setup_cow_path(dev, dev->sd_cow->dfilp);
         if (ret)
                 goto error;
 
