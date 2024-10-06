@@ -729,79 +729,80 @@ error:
         return ret;
 }
 
-#ifdef HAVE_VFS_FALLOCATE
-//#if LINUX_VERSION_CODE >= KERNEL_VERSION(3,19,0)
+// looks like we are not using real_fallocate
+// #ifdef HAVE_VFS_FALLOCATE
+// //#if LINUX_VERSION_CODE >= KERNEL_VERSION(3,19,0)
 
-/**
- * real_fallocate() - Allows the caller to allocate disk space for a file
- * within the range specified by @offset and @length.  Any subregion within
- * This domain that didn't have data before the call will contain zeroes.
- *
- * @f: A &struct file object.
- * @offset: The offset into @f indicating the start of the allocation.
- * @length: The number of byte to allocate starting at @offset.
- *
- * Return:
- * * 0 - success
- * * !0 - errno indicating the error.
- */
-#define real_fallocate(f, offset, length) vfs_fallocate(f, 0, offset, length)
+// /**
+//  * real_fallocate() - Allows the caller to allocate disk space for a file
+//  * within the range specified by @offset and @length.  Any subregion within
+//  * This domain that didn't have data before the call will contain zeroes.
+//  *
+//  * @f: A &struct file object.
+//  * @offset: The offset into @f indicating the start of the allocation.
+//  * @length: The number of byte to allocate starting at @offset.
+//  *
+//  * Return:
+//  * * 0 - success
+//  * * !0 - errno indicating the error.
+//  */
+// #define real_fallocate(f, offset, length) vfs_fallocate(f, 0, offset, length)
 
-#else
+// #else
 
-/**
- * real_fallocate() - Allows the caller to allocate disk space for a file
- * within the range specified by @offset and @length.  Any subregion within
- * this domain that didn't have data before the call will contain zeroes.
- *
- * @f: A &struct file object.
- * @offset: The offset into @f indicating the start of the allocation.
- * @length: The number of byte to allocate starting at @offset.
- *
- * Return:
- * * 0 - success
- * * !0 - errno indicating the error.
- */
-static int real_fallocate(struct file *f, uint64_t offset, uint64_t length)
-{
-        int ret;
-        loff_t off = offset;
-        loff_t len = length;
-#ifndef HAVE_FILE_INODE
-        //#if LINUX_VERSION_CODE < KERNEL_VERSION(3,9,0)
-        struct inode *inode = dattobd_get_dentry(f)->d_inode;
-#else
-        struct inode *inode = file_inode(f);
-#endif
+// /**
+//  * real_fallocate() - Allows the caller to allocate disk space for a file
+//  * within the range specified by @offset and @length.  Any subregion within
+//  * this domain that didn't have data before the call will contain zeroes.
+//  *
+//  * @f: A &struct file object.
+//  * @offset: The offset into @f indicating the start of the allocation.
+//  * @length: The number of byte to allocate starting at @offset.
+//  *
+//  * Return:
+//  * * 0 - success
+//  * * !0 - errno indicating the error.
+//  */
+// static int real_fallocate(struct file *f, uint64_t offset, uint64_t length)
+// {
+//         int ret;
+//         loff_t off = offset;
+//         loff_t len = length;
+// #ifndef HAVE_FILE_INODE
+//         //#if LINUX_VERSION_CODE < KERNEL_VERSION(3,9,0)
+//         struct inode *inode = dattobd_get_dentry(f)->d_inode;
+// #else
+//         struct inode *inode = file_inode(f);
+// #endif
 
-        if (off + len > inode->i_sb->s_maxbytes || off + len < 0)
-                return -EFBIG;
+//         if (off + len > inode->i_sb->s_maxbytes || off + len < 0)
+//                 return -EFBIG;
 
-#if !defined(HAVE_IOPS_FALLOCATE) && !defined(HAVE_FOPS_FALLOCATE)
-        //#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,23)
-        return -EOPNOTSUPP;
-#elif defined(HAVE_IOPS_FALLOCATE)
-        //#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,38)
-        if (!inode->i_op->fallocate)
-                return -EOPNOTSUPP;
-        ret = inode->i_op->fallocate(inode, 0, offset, len);
-#else
-        if (!f->f_op->fallocate)
-                return -EOPNOTSUPP;
-#ifdef HAVE_SB_START_WRITE
-        //#if LINUX_VERSION_CODE >= KERNEL_VERSION(3,6,0)
-        sb_start_write(inode->i_sb);
-#endif
-        ret = f->f_op->fallocate(f, 0, off, len);
-#ifdef HAVE_SB_START_WRITE
-        //#if LINUX_VERSION_CODE >= KERNEL_VERSION(3,6,0)
-        sb_end_write(inode->i_sb);
-#endif
-#endif
+// #if !defined(HAVE_IOPS_FALLOCATE) && !defined(HAVE_FOPS_FALLOCATE)
+//         //#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,23)
+//         return -EOPNOTSUPP;
+// #elif defined(HAVE_IOPS_FALLOCATE)
+//         //#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,38)
+//         if (!inode->i_op->fallocate)
+//                 return -EOPNOTSUPP;
+//         ret = inode->i_op->fallocate(inode, 0, offset, len);
+// #else
+//         if (!f->f_op->fallocate)
+//                 return -EOPNOTSUPP;
+// #ifdef HAVE_SB_START_WRITE
+//         //#if LINUX_VERSION_CODE >= KERNEL_VERSION(3,6,0)
+//         sb_start_write(inode->i_sb);
+// #endif
+//         ret = f->f_op->fallocate(f, 0, off, len);
+// #ifdef HAVE_SB_START_WRITE
+//         //#if LINUX_VERSION_CODE >= KERNEL_VERSION(3,6,0)
+//         sb_end_write(inode->i_sb);
+// #endif
+// #endif
 
-        return ret;
-}
-#endif
+//         return ret;
+// }
+// #endif
 
 /**
  * file_allocate() - Allows the caller to allocate disk space for a file
