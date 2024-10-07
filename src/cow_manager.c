@@ -1185,9 +1185,8 @@ out:
 }
 
 
-int cow_expand_datastore(struct snap_device* dev, uint64_t append_size){
+int cow_expand_datastore(struct cow_manager* cm, uint64_t append_size){
         int ret;
-        struct cow_manager *cm = dev->sd_cow;
         uint64_t curr_max = cm->file_size;
         uint64_t actual = 0;
 
