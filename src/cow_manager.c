@@ -299,7 +299,7 @@ int __cow_write_header(struct cow_manager *cm, int is_clean)
         ch.magic = COW_MAGIC;
         ch.flags = cm->flags;
         ch.fpos = cm->curr_pos;
-        ch.fsize = cm->file_max;
+        ch.fsize = cm->file_size;
         ch.seqid = cm->seqid;
         memcpy(ch.uuid, cm->uuid, COW_UUID_SIZE);
         ch.version = cm->version;
@@ -373,7 +373,7 @@ int __cow_open_header(struct cow_manager *cm, int index_only, int reset_vmalloc)
                 cm->flags = ch.flags;
 
         cm->curr_pos = ch.fpos;
-        cm->file_max = ch.fsize;
+        cm->file_size = ch.fsize;
         cm->seqid = ch.seqid;
         memcpy(cm->uuid, ch.uuid, COW_UUID_SIZE);
         cm->version = ch.version;
@@ -716,7 +716,7 @@ int cow_init(struct snap_device *dev, const char *path, uint64_t elements, unsig
         cm->nr_changed_blocks = 0;
         cm->flags = 0;
         cm->allocated_sects = 0;
-        cm->file_max = file_max;
+        cm->file_size = file_max;
         cm->sect_size = sect_size; //how many elements(sectors) can section hold (in datastore); = 4096
         cm->seqid = seqid;
         // get_order(x) = ceil[log2(x / PAGE_SIZE)]
@@ -807,7 +807,7 @@ int cow_truncate_to_index(struct cow_manager *cm)
         ret = file_truncate(cm->dfilp, cm->data_offset);
 
         if(!ret)
-                cm->file_max = cm->data_offset;
+                cm->file_size = cm->data_offset;
         
         return ret;
 }
@@ -944,17 +944,17 @@ static int __cow_write_data(struct cow_manager *cm, void *buf)
         int abs_path_len;
         uint64_t curr_size = cm->curr_pos * COW_BLOCK_SIZE;
 
-        if (curr_size >= cm->file_max) {
+        if (curr_size >= cm->file_size) {
                 ret = -EFBIG;
 
                 file_get_absolute_pathname(cm->dfilp, &abs_path, &abs_path_len);
                 if (!abs_path) {
                         LOG_ERROR(ret, "cow file max size exceeded (%llu/%llu)",
-                                  curr_size, cm->file_max);
+                                  curr_size, cm->file_size);
                 } else {
                         LOG_ERROR(ret,
                                   "cow file '%s' max size exceeded (%llu/%llu)",
-                                  abs_path, curr_size, cm->file_max);
+                                  abs_path, curr_size, cm->file_size);
                         kfree(abs_path);
                 }
 
@@ -1188,10 +1188,10 @@ out:
 int cow_expand_datastore(struct snap_device* dev, uint64_t append_size){
         int ret;
         struct cow_manager *cm = dev->sd_cow;
-        uint64_t curr_max = cm->file_max;
+        uint64_t curr_max = cm->file_size;
         uint64_t actual = 0;
 
-        ret = file_allocate(cm->dfilp, cm->dev, cm->file_max, append_size, &actual);
+        ret = file_allocate(cm->dfilp, cm->dev, cm->file_size, append_size, &actual);
 
         if(actual != append_size){
                 LOG_WARN("cow file was not expanded to requested size (req: %llu, act: %llu)", append_size, actual);
@@ -1202,6 +1202,6 @@ int cow_expand_datastore(struct snap_device* dev, uint64_t append_size){
                 return ret;
         }
 
-        cm->file_max = cm->file_max + actual;
+        cm->file_size = cm->file_size + actual;
         return 0;
 }

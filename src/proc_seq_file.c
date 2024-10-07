@@ -184,7 +184,7 @@ static int dattobd_proc_show(struct seq_file *m, void *v)
                         if (dev->sd_cow) {
                                 int i;
                                 seq_printf(m, "\t\t\t\"cow_size_current\": %llu,\n",
-                                   (unsigned long long)dev->sd_cow->file_max);
+                                   (unsigned long long)dev->sd_cow->file_size);
 
                                 seq_printf(
                                         m, "\t\t\t\"seq_id\": %llu,\n",
