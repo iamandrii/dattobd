@@ -45,7 +45,7 @@ struct cow_manager {
         uint32_t flags; // flags representing current state of cow manager
         uint64_t curr_pos; // current write head position
         uint64_t data_offset; // starting offset of data
-        uint64_t file_size; // current size of the file, max size before an error is thrown
+        uint64_t file_size; // current size of the file, max size before an error is thrown or file is expanded
         uint64_t seqid; // sequence id, increments on each transition to
                         // snapshot mode
         uint64_t version; // version of cow file format
@@ -63,6 +63,10 @@ struct cow_manager {
         struct cow_section *sects; // pointer to the array of sections of
                                    // mappings
         struct snap_device* dev;  //pointer to snapshot device
+
+        // for now, auto expand settings are not preserved during reloads
+        uint64_t auto_expand_step_size; // size in bytes to expand the cow file when it is full
+        long auto_expand_max; // maximum number of times the cow file can be expanded
 };
 
 /***************************COW MANAGER FUNCTIONS**************************/

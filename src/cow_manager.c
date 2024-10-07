@@ -622,6 +622,8 @@ int cow_reload(const char *path, uint64_t elements, unsigned long sect_size,
         cm->allowed_sects =
                 __cow_calculate_allowed_sects(cache_size, cm->total_sects);
         cm->data_offset = COW_HEADER_SIZE + (cm->total_sects * (sect_size * sizeof(uint64_t)));
+        cm->auto_expand_step_size = 0;
+        cm->auto_expand_max = 0;
 
         ret = __cow_open_header(cm, index_only, 1);
         if (ret)
@@ -730,6 +732,8 @@ int cow_init(struct snap_device *dev, const char *path, uint64_t elements, unsig
         cm->data_offset = COW_HEADER_SIZE + (cm->total_sects * (sect_size * 8)); // data offset in bytes, equals 4096 + [total_sects*4096*8](index size)
         cm->curr_pos = cm->data_offset / COW_BLOCK_SIZE;
         cm->dev = dev;
+        cm->auto_expand_step_size = 0;
+        cm->auto_expand_max = 0;
 
         if (uuid)
                 memcpy(cm->uuid, uuid, COW_UUID_SIZE);
@@ -945,6 +949,7 @@ static int __cow_write_data(struct cow_manager *cm, void *buf)
         uint64_t curr_size = cm->curr_pos * COW_BLOCK_SIZE;
 
         if (curr_size >= cm->file_size) {
+                // TODO: expand the cow file if possible
                 ret = -EFBIG;
 
                 file_get_absolute_pathname(cm->dfilp, &abs_path, &abs_path_len);
