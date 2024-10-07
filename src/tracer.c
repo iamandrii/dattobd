@@ -406,26 +406,26 @@ static int bdev_is_already_traced(const struct block_device *bdev)
 }
 
 /**
- * file_is_on_bdev() - Checks to see if the &struct file object is contained
+ * file_is_on_bdev() - Checks to see if the &struct dattobd mutable file object is contained
  * within the &struct block_device device.
  *
- * @file: the file to check
- * @bdev: the &struct block_device that might hold the @file.
+ * @dfilp: A dattobd mutable file object.
+ * @bdev: the &struct block_device that might hold the @dfilp.
  *
  * Return:
- * * 0 - the @file is not on the @bdev.
- * * !0 - the @file is on the @bdev.
+ * * 0 - the @dfilp is not on the @bdev.
+ * * !0 - the @dfilp is on the @bdev.
  */
-static int file_is_on_bdev(const struct file *file, struct block_device *bdev)
+static int file_is_on_bdev(const struct dattobd_mutable_file *dfilp, struct block_device *bdev)
 {
         struct super_block *sb = dattobd_get_super(bdev);
-        struct super_block *sb_file = (dattobd_get_mnt(file))->mnt_sb;
+        struct super_block *sb_file = dfilp->mnt->mnt_sb;
         int ret = 0;
 
         if (sb) {
                 LOG_DEBUG("file_is_on_bdev() if(sb)");
                 LOG_DEBUG("sb name:%s, file->sb name:%s", sb->s_root->d_name.name, sb_file->s_root->d_name.name);
-                ret = ((dattobd_get_mnt(file))->mnt_sb == sb);
+                ret = (dfilp->mnt->mnt_sb == sb);
                 dattobd_drop_super(sb);
         }
         return ret;
@@ -667,7 +667,7 @@ static int __tracer_setup_cow(struct snap_device *dev,
         }
 
         // verify that file is on block device
-        if (!file_is_on_bdev(dev->sd_cow->dfilp->filp, bdev)) {
+        if (!file_is_on_bdev(dev->sd_cow->dfilp, bdev)) {
                 ret = -EINVAL;
 #ifdef HAVE_BDEVNAME
                 LOG_ERROR(ret, "'%s' is not on '%s'", cow_path, bdev_name);
@@ -2002,7 +2002,7 @@ int tracer_active_snap_to_inc(struct snap_device *old_dev)
         ret = cow_truncate_to_index(dev->sd_cow);
         if (ret) {
                 // not a critical error, we can just print a warning
-                file_get_absolute_pathname(dev->sd_cow->dfilp->filp, &abs_path,
+                file_get_absolute_pathname(dev->sd_cow->dfilp, &abs_path,
                                            &abs_path_len);
                 if (!abs_path) {
                         LOG_WARN("warning: cow file truncation failed, "
