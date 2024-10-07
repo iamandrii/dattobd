@@ -430,7 +430,7 @@ int ioctl_expand_cow_file(unsigned int minor, unsigned long size)
                 goto error;
         }
 
-        ret = cow_expand_datastore(dev, size);
+        ret = cow_expand_datastore(dev->sd_cow, size);
 
         if(ret)
                 goto error;
