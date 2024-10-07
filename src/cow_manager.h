@@ -40,6 +40,14 @@ struct cow_section {
         uint64_t *mappings;
 };
 
+// for now, auto expand settings are not preserved during reloads
+struct cow_auto_expand_manager {
+        struct mutex lock;
+
+        uint64_t step_size;
+        long steps;
+};
+
 struct cow_manager {
         struct dattobd_mutable_file *dfilp; // the file the cow manager is writing to
         uint32_t flags; // flags representing current state of cow manager
@@ -64,9 +72,7 @@ struct cow_manager {
                                    // mappings
         struct snap_device* dev;  //pointer to snapshot device
 
-        // for now, auto expand settings are not preserved during reloads
-        uint64_t auto_expand_step_size; // size in bytes to expand the cow file when it is full
-        long auto_expand_max; // maximum number of times the cow file can be expanded
+        struct cow_auto_expand_manager* auto_expand; // auto expand settings
 };
 
 /***************************COW MANAGER FUNCTIONS**************************/
@@ -105,5 +111,13 @@ int __cow_write_mapping(struct cow_manager *cm, uint64_t pos, uint64_t val);
 int cow_get_file_extents(struct snap_device* dev, struct file* filp);
 
 int __cow_expand_datastore(struct cow_manager *cm, uint64_t append_size);
+
+struct cow_auto_expand_manager* cow_auto_expand_manager_init(void);
+
+int cow_auto_expand_manager_reconfigure(struct cow_auto_expand_manager* aem, uint64_t step_size, long steps);
+
+uint64_t cow_auto_expand_manager_test_and_dec(struct cow_auto_expand_manager* aem);
+
+void cow_auto_expand_manager_free(struct cow_auto_expand_manager* aem);
 
 #endif /* COW_MANAGER_H_ */
