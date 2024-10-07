@@ -1356,9 +1356,11 @@ struct dattobd_mutable_file* dattobd_mutable_file_wrap(struct file* filp){
 
         atomic_set(&dfilp->writers, 0);
 
+        igrab(dfilp->inode);
         if((~dfilp->inode->i_flags) & S_IMMUTABLE){
                 dfilp->inode->i_flags |= S_IMMUTABLE;
         }
+        iput(dfilp->inode);
 
         return dfilp;
 error:
