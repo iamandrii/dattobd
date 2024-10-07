@@ -417,7 +417,7 @@ error:
  * file_get_absolute_pathname() - Gets an absolute path from the supplied
  *                                &struct file object.
  *
- * @filp: A &struct file object.
+ * @dfilp: A dattobd mutable file object.
  * @buf: Output pathname. Use kfree() on the returned buffer.
  * @len_res: Pathname length of the result, NULL means don't care.
  *
@@ -427,14 +427,19 @@ error:
  * * 0 - success
  * * !0 - errno indicating the error.
  */
-int file_get_absolute_pathname(const struct file *filp, char **buf,
+int file_get_absolute_pathname(const struct dattobd_mutable_file *dfilp, char **buf,
                                int *len_res)
 {
         struct path path;
         int ret;
 
-        path.mnt = dattobd_get_mnt(filp);
-        path.dentry = dattobd_get_dentry(filp);
+        if(unlikely(!dfilp)){
+                ret = -EINVAL;
+                goto error;
+        }
+
+        path.mnt = dfilp->mnt;
+        path.dentry = dfilp->dentry;
 
         ret = path_get_absolute_pathname(&path, buf, len_res);
         if (ret)
@@ -806,7 +811,7 @@ int file_allocate(struct dattobd_mutable_file *dfilp, struct snap_device* dev,  
         int abs_path_len;
         unsigned long cur_done;
 
-        file_get_absolute_pathname(dfilp->filp, &abs_path, &abs_path_len);
+        file_get_absolute_pathname(dfilp, &abs_path, &abs_path_len);
 
         // allocate page of zeros
         page_buf = (char *)get_zeroed_page(GFP_KERNEL);
@@ -1350,6 +1355,20 @@ struct dattobd_mutable_file* dattobd_mutable_file_wrap(struct file* filp){
 
         if(unlikely(!dfilp->inode)){
                 LOG_ERROR(-ENOENT, "error getting inode from dentry, inode is absent");
+                ret = -ENOENT;
+                goto error;
+        }
+
+        dfilp->mnt = dattobd_get_mnt(filp);
+
+        if(unlikely(IS_ERR(dfilp->mnt))){
+                LOG_ERROR((int)PTR_ERR(dfilp->mnt), "error getting vfsmount from file");
+                ret = PTR_ERR(dfilp->mnt);
+                goto error;
+        }
+
+        if(unlikely(!dfilp->mnt)){
+                LOG_ERROR(-ENOENT, "error getting vfsmount from file, vfsmount is absent");
                 ret = -ENOENT;
                 goto error;
         }

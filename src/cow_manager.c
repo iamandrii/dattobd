@@ -947,7 +947,7 @@ static int __cow_write_data(struct cow_manager *cm, void *buf)
         if (curr_size >= cm->file_max) {
                 ret = -EFBIG;
 
-                file_get_absolute_pathname(cm->dfilp->filp, &abs_path, &abs_path_len);
+                file_get_absolute_pathname(cm->dfilp, &abs_path, &abs_path_len);
                 if (!abs_path) {
                         LOG_ERROR(ret, "cow file max size exceeded (%llu/%llu)",
                                   curr_size, cm->file_max);

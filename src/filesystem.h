@@ -66,6 +66,7 @@ struct dattobd_mutable_file {
         struct file *filp;
         struct dentry *dentry;
         struct inode *inode;
+        struct vfsmount *mnt;
         
         atomic_t writers;
 };
@@ -113,7 +114,7 @@ int dentry_get_relative_pathname(struct dentry *dentry, char **buf,
                                  int *len_res);
 #endif
 
-int file_get_absolute_pathname(const struct file *filp, char **buf,
+int file_get_absolute_pathname(const struct dattobd_mutable_file *dfilp, char **buf,
                                int *len_res);
 
 int pathname_to_absolute(const char *pathname, char **buf, int *len_res);
