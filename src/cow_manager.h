@@ -45,7 +45,7 @@ struct cow_manager {
         uint32_t flags; // flags representing current state of cow manager
         uint64_t curr_pos; // current write head position
         uint64_t data_offset; // starting offset of data
-        uint64_t file_max; // max size of the file before an error is thrown
+        uint64_t file_size; // current size of the file, max size before an error is thrown
         uint64_t seqid; // sequence id, increments on each transition to
                         // snapshot mode
         uint64_t version; // version of cow file format

@@ -661,7 +661,7 @@ static int __tracer_setup_cow(struct snap_device *dev,
                         if (ret)
                                 goto error;
 
-                        dev->sd_falloc_size = dev->sd_cow->file_max;
+                        dev->sd_falloc_size = dev->sd_cow->file_size;
                         do_div(dev->sd_falloc_size, (1024 * 1024));
                 }
         }
@@ -2153,7 +2153,7 @@ void tracer_dattobd_info(const struct snap_device *dev,
         strlcpy(info->bdev, dev->sd_bdev_path, PATH_MAX);
 
         if (!test_bit(UNVERIFIED, &dev->sd_state)) {
-                info->falloc_size = dev->sd_cow->file_max;
+                info->falloc_size = dev->sd_cow->file_size;
                 info->seqid = dev->sd_cow->seqid;
                 memcpy(info->uuid, dev->sd_cow->uuid, COW_UUID_SIZE);
                 info->version = dev->sd_cow->version;
