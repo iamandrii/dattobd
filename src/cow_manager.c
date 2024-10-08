@@ -1229,7 +1229,7 @@ struct cow_auto_expand_manager* cow_auto_expand_manager_init(void){
         struct cow_auto_expand_manager* aem = kzalloc(sizeof(struct cow_auto_expand_manager), GFP_KERNEL);
         if(!aem){
                 LOG_ERROR(-ENOMEM, "error allocating cow auto expand manager");
-                return NULL;
+                return ERR_PTR(-ENOMEM);
         }
 
         mutex_init(&aem->lock);
