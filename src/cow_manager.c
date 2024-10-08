@@ -1261,6 +1261,9 @@ uint64_t cow_auto_expand_manager_test_and_dec(struct cow_auto_expand_manager* ae
         if(aem->steps > 0){
                 aem->steps--;
                 ret = aem->step_size;
+        }else if(aem->steps == -1){
+                // infinite steps
+                ret = aem->step_size;
         }
         mutex_unlock(&aem->lock);
 
