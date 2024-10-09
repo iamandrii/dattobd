@@ -414,23 +414,7 @@ int ioctl_expand_cow_file(unsigned int minor, unsigned long size)
 
         dev = snap_devices[minor];
 
-        // check that the device is not in the fail state
-        if (tracer_read_fail_state(dev)) {
-                ret = -EINVAL;
-                LOG_ERROR(ret, "device specified is in the fail state");
-                goto error;
-        }
-
-        // check that tracer is in active snapshot state
-        if (!test_bit(SNAPSHOT, &dev->sd_state) ||
-            !test_bit(ACTIVE, &dev->sd_state)) {
-                ret = -EINVAL;
-                LOG_ERROR(ret,
-                          "device specified is not in active snapshot mode");
-                goto error;
-        }
-
-        ret = cow_expand_datastore(dev->sd_cow, size);
+        ret = tracer_expand_cow_file(dev, size);
 
         if(ret)
                 goto error;
