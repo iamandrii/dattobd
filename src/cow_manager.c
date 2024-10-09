@@ -1185,9 +1185,8 @@ out:
 }
 
 
-int cow_expand_datastore(struct cow_manager* cm, uint64_t append_size){
+int __cow_expand_datastore(struct cow_manager* cm, uint64_t append_size){
         int ret;
-        uint64_t curr_max = cm->file_size;
         uint64_t actual = 0;
 
         ret = file_allocate(cm->dfilp, cm->dev, cm->file_size, append_size, &actual);
@@ -1196,11 +1195,12 @@ int cow_expand_datastore(struct cow_manager* cm, uint64_t append_size){
                 LOG_WARN("cow file was not expanded to requested size (req: %llu, act: %llu)", append_size, actual);
         }
 
-        if (ret && !actual){
+        cm->file_size = cm->file_size + actual;
+
+        if (ret){
                 LOG_ERROR(ret, "unable to expand cow file");
                 return ret;
         }
 
-        cm->file_size = cm->file_size + actual;
         return 0;
 }

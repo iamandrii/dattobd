@@ -100,6 +100,6 @@ int __cow_write_mapping(struct cow_manager *cm, uint64_t pos, uint64_t val);
 
 int cow_get_file_extents(struct snap_device* dev, struct file* filp);
 
-int cow_expand_datastore(struct cow_manager *cm, uint64_t append_size);
+int __cow_expand_datastore(struct cow_manager *cm, uint64_t append_size);
 
 #endif /* COW_MANAGER_H_ */

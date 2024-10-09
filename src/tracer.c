@@ -2441,3 +2441,38 @@ error:
                 kfree(cow_path);
         tracer_set_fail_state(dev, ret);
 }
+
+int tracer_expand_cow_file(struct snap_device *dev, uint64_t size){
+        int ret;
+        LOG_DEBUG("ENTER tracer_expand_cow_file");
+        if(test_bit(UNVERIFIED, &dev->sd_state)){
+                LOG_ERROR(-EINVAL, "cannot expand cow file for unverified device");
+                return -EINVAL;
+        }
+
+        if(!test_bit(ACTIVE, &dev->sd_state)){
+                LOG_ERROR(-EBUSY, "cannot expand cow file for inactive device");
+                return -EBUSY;
+        }
+
+        if(!test_bit(SNAPSHOT, &dev->sd_state)){
+                LOG_ERROR(-EINVAL, "cow expansion not supported for incremental mode");
+                return -EINVAL;
+        }
+
+        if(tracer_read_fail_state(dev)){
+                LOG_ERROR(-EBUSY, "cannot expand cow file for device in error state");
+                return -EBUSY;
+        }
+
+        ret = __cow_expand_datastore(dev->sd_cow, size);
+
+        if(ret){
+                LOG_ERROR(ret, "error expanding cow file");
+                tracer_set_fail_state(dev, ret);
+                __tracer_destroy_cow_thread(dev);
+                // cow_thread must fail in a few moments
+        }
+
+        return ret;
+}
