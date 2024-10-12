@@ -2470,7 +2470,7 @@ int tracer_expand_cow_file(struct snap_device *dev, uint64_t size){
         if(ret){
                 LOG_ERROR(ret, "error expanding cow file");
                 tracer_set_fail_state(dev, ret);
-                __tracer_destroy_cow_thread(dev);
+                // __tracer_destroy_cow_thread(dev); -- we can't ask for thread destroy, as this function may be called from cow thread
                 // cow_thread must fail in a few moments
         }
 
