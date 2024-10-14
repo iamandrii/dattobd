@@ -7,6 +7,7 @@
 #include "cow_manager.h"
 #include "filesystem.h"
 #include "logging.h"
+#include "tracer.h"
 
 #ifdef HAVE_UUID_H
 #include <linux/uuid.h>
@@ -25,6 +26,34 @@
 // memory macros
 #define get_zeroed_pages(flags, order)                                         \
         __get_free_pages(((flags) | __GFP_ZERO), order)
+
+inline void __close_and_destroy_dattobd_mutable_file(struct dattobd_mutable_file *dfilp){
+        file_close(dfilp);
+        dattobd_mutable_file_unwrap(dfilp);
+}
+
+inline int __open_dattobd_mutable_file(const char *path, int flags, struct dattobd_mutable_file **dfilp){
+        struct file* filp = NULL;
+        int ret;
+
+        ret = file_open(path, flags, &filp);
+
+        if(ret){
+                LOG_ERROR(ret, "failed to open file");
+                return ret;
+        }
+
+        *dfilp = dattobd_mutable_file_wrap(filp);
+
+        if(IS_ERR(*dfilp)){
+                LOG_ERROR(-ENOMEM, "failed to wrap file pointer");
+                __file_close_raw(filp);
+                // filp does not need to be kfreed here, it is handled by the filp_close under the hood
+                return -ENOMEM;
+        }
+
+        return 0;
+}
 
 /**
  * __cow_free_section() - Frees the memory used to track the section at
@@ -99,11 +128,11 @@ int __cow_load_section(struct cow_manager *cm, unsigned long sect_idx)
 		int mapping_offset = (COW_BLOCK_SIZE / sizeof(cm->sects[sect_idx].mappings[0])) * i;
 		int cow_file_offset = COW_BLOCK_SIZE * i;
 
-        ret = file_read(cm->filp, cm->dev, cm->sects[sect_idx].mappings,
-                        cm->sect_size * sect_idx * 8 + COW_HEADER_SIZE,
-                        cm->sect_size * 8);
-        if (ret)
-                goto error;
+                ret = file_read(cm->dfilp, cm->dev, cm->sects[sect_idx].mappings,
+                                cm->sect_size * sect_idx * 8 + COW_HEADER_SIZE,
+                                cm->sect_size * 8);
+                if (ret)
+                        goto error;
         }
 
         return 0;
@@ -133,7 +162,7 @@ int __cow_write_section(struct cow_manager *cm, unsigned long sect_idx)
 		int mapping_offset = (COW_BLOCK_SIZE / sizeof(cm->sects[sect_idx].mappings[0])) * i;
 		int cow_file_offset = COW_BLOCK_SIZE * i;
 
-        ret = file_write(cm->filp, cm->dev, cm->sects[sect_idx].mappings,
+        ret = file_write(cm->dfilp, cm->dev, cm->sects[sect_idx].mappings,
                          cm->sect_size * sect_idx * 8 + COW_HEADER_SIZE,
                          cm->sect_size * 8);
         if (ret) {
@@ -271,13 +300,13 @@ int __cow_write_header(struct cow_manager *cm, int is_clean)
         ch.magic = COW_MAGIC;
         ch.flags = cm->flags;
         ch.fpos = cm->curr_pos;
-        ch.fsize = cm->file_max;
+        ch.fsize = cm->file_size;
         ch.seqid = cm->seqid;
         memcpy(ch.uuid, cm->uuid, COW_UUID_SIZE);
         ch.version = cm->version;
         ch.nr_changed_blocks = cm->nr_changed_blocks;
 
-        ret = file_write(cm->filp, cm->dev, &ch, 0, sizeof(struct cow_header));
+        ret = file_write(cm->dfilp, cm->dev, &ch, 0, sizeof(struct cow_header));
         if (ret) {
                 LOG_ERROR(ret, "error syncing cow manager header");
                 return ret;
@@ -309,7 +338,7 @@ int __cow_open_header(struct cow_manager *cm, int index_only, int reset_vmalloc)
         int ret;
         struct cow_header ch;
 
-        ret = file_read(cm->filp, cm->dev, &ch, 0, sizeof(struct cow_header));
+        ret = file_read(cm->dfilp, cm->dev, &ch, 0, sizeof(struct cow_header));
         if (ret)
                 goto error;
 
@@ -345,7 +374,7 @@ int __cow_open_header(struct cow_manager *cm, int index_only, int reset_vmalloc)
                 cm->flags = ch.flags;
 
         cm->curr_pos = ch.fpos;
-        cm->file_max = ch.fsize;
+        cm->file_size = ch.fsize;
         cm->seqid = ch.seqid;
         memcpy(cm->uuid, ch.uuid, COW_UUID_SIZE);
         cm->version = ch.version;
@@ -386,9 +415,10 @@ void cow_free_members(struct cow_manager *cm)
                 cm->sects = NULL;
         }
 
-        if (cm->filp) {
-                file_unlink_and_close_force(cm->filp);
-                cm->filp = NULL;
+        if (cm->dfilp) {
+                file_unlink_and_close_force(cm->dfilp);
+                __close_and_destroy_dattobd_mutable_file(cm->dfilp);
+                cm->dfilp = NULL;
         }
 }
 
@@ -426,9 +456,10 @@ int cow_sync_and_free(struct cow_manager *cm)
         if (ret)
                 goto error;
 
-        if (cm->filp)
-                file_close(cm->filp);
-        cm->filp = NULL;
+        if (cm->dfilp){
+                __close_and_destroy_dattobd_mutable_file(cm->dfilp);
+                cm->dfilp = NULL;
+        }
 
         if (cm->sects) {
                 if (cm->flags & (1 << COW_VMALLOC_UPPER))
@@ -470,12 +501,13 @@ int cow_sync_and_close(struct cow_manager *cm)
         if (ret)
                 goto error;
 
-        ret = cow_get_file_extents(cm->dev, cm->filp);
+        ret = cow_get_file_extents(cm->dev, cm->dfilp->filp);
 	if(ret) goto error;
 
-        if (cm->filp)
-                file_close(cm->filp);
-        cm->filp = NULL;
+        if (cm->dfilp){
+                __close_and_destroy_dattobd_mutable_file(cm->dfilp);
+                cm->dfilp = NULL;
+        }
 
         return 0;
 
@@ -500,7 +532,7 @@ int cow_reopen(struct cow_manager *cm, const char *pathname)
         int ret;
 
         LOG_DEBUG("reopening cow file");
-        ret = file_open(pathname, 0, &cm->filp);
+        ret = __open_dattobd_mutable_file(pathname, 0, &cm->dfilp);
         if (ret)
                 goto error;
 
@@ -513,9 +545,10 @@ int cow_reopen(struct cow_manager *cm, const char *pathname)
 
 error:
         LOG_ERROR(ret, "error reopening cow manager");
-        if (cm->filp)
-                file_close(cm->filp);
-        cm->filp = NULL;
+        if (cm->dfilp){
+                __close_and_destroy_dattobd_mutable_file(cm->dfilp);
+                cm->dfilp = NULL;
+        }
 
         return ret;
 }
@@ -578,7 +611,7 @@ int cow_reload(const char *path, uint64_t elements, unsigned long sect_size,
         }
 
         LOG_DEBUG("opening cow file");
-        ret = file_open(path, 0, &cm->filp);
+        ret = __open_dattobd_mutable_file(path, 0, &cm->dfilp);
         if (ret)
                 goto error;
 
@@ -590,6 +623,7 @@ int cow_reload(const char *path, uint64_t elements, unsigned long sect_size,
         cm->allowed_sects =
                 __cow_calculate_allowed_sects(cache_size, cm->total_sects);
         cm->data_offset = COW_HEADER_SIZE + (cm->total_sects * (sect_size * sizeof(uint64_t)));
+        cm->auto_expand = NULL;
 
         ret = __cow_open_header(cm, index_only, 1);
         if (ret)
@@ -621,8 +655,10 @@ int cow_reload(const char *path, uint64_t elements, unsigned long sect_size,
 
 error:
         LOG_ERROR(ret, "error during cow manager initialization");
-        if (cm->filp)
-                file_close(cm->filp);
+        if (cm->dfilp){
+                __close_and_destroy_dattobd_mutable_file(cm->dfilp);
+                cm->dfilp = NULL;
+        }
 
         if (cm->sects) {
                 if (cm->flags & (1 << COW_VMALLOC_UPPER))
@@ -674,7 +710,7 @@ int cow_init(struct snap_device *dev, const char *path, uint64_t elements, unsig
         }
 
         LOG_DEBUG("creating cow file");
-        ret = file_open(path, O_CREAT | O_TRUNC, &cm->filp);
+        ret = __open_dattobd_mutable_file(path, O_CREAT | O_TRUNC, &cm->dfilp);
         if (ret)
                 goto error;
 
@@ -682,17 +718,21 @@ int cow_init(struct snap_device *dev, const char *path, uint64_t elements, unsig
         cm->nr_changed_blocks = 0;
         cm->flags = 0;
         cm->allocated_sects = 0;
-        cm->file_max = file_max;
-        cm->sect_size = sect_size;
+        cm->file_size = file_max;
+        cm->sect_size = sect_size; //how many elements(sectors) can section hold (in datastore); = 4096
         cm->seqid = seqid;
-        cm->log_sect_pages = get_order(sect_size * 8);
+        // get_order(x) = ceil[log2(x / PAGE_SIZE)]
+        cm->log_sect_pages = get_order(sect_size * 8); //PAGE_SIZE = 4096 bytes; log2[pages in section in index]; = log2(4096*8/4096) = 3
+        // this implies that section uses 2^15 B in index => sector consists of 8 B of metadata in index
+        // means how many pages do we need to store metadata of one section in index
         cm->total_sects =
-                NUM_SEGMENTS(elements, cm->log_sect_pages + PAGE_SHIFT - 3);
+                NUM_SEGMENTS(elements, cm->log_sect_pages + PAGE_SHIFT - 3);  //total sections to store all of the sectors; = ceil(elements / 4096)
         cm->allowed_sects =
-                __cow_calculate_allowed_sects(cache_size, cm->total_sects);
-        cm->data_offset = COW_HEADER_SIZE + (cm->total_sects * (sect_size * 8));
+                __cow_calculate_allowed_sects(cache_size, cm->total_sects); //num of sections that can fit in cache apart from index
+        cm->data_offset = COW_HEADER_SIZE + (cm->total_sects * (sect_size * 8)); // data offset in bytes, equals 4096 + [total_sects*4096*8](index size)
         cm->curr_pos = cm->data_offset / COW_BLOCK_SIZE;
         cm->dev = dev;
+        cm->auto_expand = NULL;
 
         if (uuid)
                 memcpy(cm->uuid, uuid, COW_UUID_SIZE);
@@ -718,7 +758,7 @@ int cow_init(struct snap_device *dev, const char *path, uint64_t elements, unsig
 
         LOG_DEBUG("allocating cow file (%llu bytes)",
                   (unsigned long long)file_max);
-        ret = file_allocate(cm->filp, cm->dev, 0, file_max);
+        ret = file_allocate(cm->dfilp, cm->dev, 0, file_max, NULL);
         if (ret)
                 goto error;
 
@@ -731,8 +771,11 @@ int cow_init(struct snap_device *dev, const char *path, uint64_t elements, unsig
 
 error:
         LOG_ERROR(ret, "error during cow manager initialization");
-        if (cm->filp)
-                file_unlink_and_close(cm->filp);
+        if (cm->dfilp){
+                file_unlink_and_close(cm->dfilp);
+                __close_and_destroy_dattobd_mutable_file(cm->dfilp);
+                cm->dfilp = NULL;
+        }
 
         if (cm->sects) {
                 if (cm->flags & (1 << COW_VMALLOC_UPPER))
@@ -760,9 +803,16 @@ error:
  */
 int cow_truncate_to_index(struct cow_manager *cm)
 {
+        int ret;
+
         // truncate the cow file to just the index
         cm->flags |= (1 << COW_INDEX_ONLY);
-        return file_truncate(cm->filp, cm->data_offset);
+        ret = file_truncate(cm->dfilp, cm->data_offset);
+
+        if(!ret)
+                cm->file_size = cm->data_offset;
+        
+        return ret;
 }
 
 /**
@@ -844,6 +894,7 @@ int __cow_write_mapping(struct cow_manager *cm, uint64_t pos, uint64_t val)
         int ret;
         uint64_t sect_idx = pos;
         unsigned long sect_pos = do_div(sect_idx, cm->sect_size);
+        //do_div modifies sect_idx to be the quotient of pos divided by cm->sect_size and returns the remainder
 
         cm->sects[sect_idx].usage++;
 
@@ -895,25 +946,40 @@ static int __cow_write_data(struct cow_manager *cm, void *buf)
         char *abs_path = NULL;
         int abs_path_len;
         uint64_t curr_size = cm->curr_pos * COW_BLOCK_SIZE;
+        uint64_t expand_allowance = 0;
 
-        if (curr_size >= cm->file_max) {
+retry:
+        if (curr_size >= cm->file_size) {
+                // try expansion of cow_file
+                if(cm->auto_expand){
+                        expand_allowance = cow_auto_expand_manager_test_and_dec(cm->auto_expand);
+                        if(expand_allowance){
+                                ret = tracer_expand_cow_file(cm->dev, expand_allowance);
+                                expand_allowance = 0;
+                                if(ret)
+                                        goto error;
+                                goto retry;
+                        }
+                }
+
+
                 ret = -EFBIG;
 
-                file_get_absolute_pathname(cm->filp, &abs_path, &abs_path_len);
+                file_get_absolute_pathname(cm->dfilp, &abs_path, &abs_path_len);
                 if (!abs_path) {
                         LOG_ERROR(ret, "cow file max size exceeded (%llu/%llu)",
-                                  curr_size, cm->file_max);
+                                  curr_size, cm->file_size);
                 } else {
                         LOG_ERROR(ret,
                                   "cow file '%s' max size exceeded (%llu/%llu)",
-                                  abs_path, curr_size, cm->file_max);
+                                  abs_path, curr_size, cm->file_size);
                         kfree(abs_path);
                 }
 
                 goto error;
         }
 
-        ret = file_write(cm->filp, cm->dev, buf, curr_size, COW_BLOCK_SIZE);
+        ret = file_write(cm->dfilp, cm->dev, buf, curr_size, COW_BLOCK_SIZE);
         if (ret)
                 goto error;
 
@@ -992,7 +1058,7 @@ int cow_read_data(struct cow_manager *cm, void *buf, uint64_t block_pos,
         if (block_off >= COW_BLOCK_SIZE)
                 return -EINVAL;
 
-        ret = file_read(cm->filp, cm->dev, buf, (block_pos * COW_BLOCK_SIZE) + block_off,
+        ret = file_read(cm->dfilp, cm->dev, buf, (block_pos * COW_BLOCK_SIZE) + block_off,
                         len);
         if (ret) {
                 LOG_ERROR(ret, "error reading cow data");
@@ -1134,4 +1200,78 @@ out:
 	vm_munmap(vma->vm_start, cow_ext_buf_size);
 	__free_pages(pg, get_order(cow_ext_buf_size));
 	return ret;
+}
+
+
+int __cow_expand_datastore(struct cow_manager* cm, uint64_t append_size){
+        int ret;
+        uint64_t actual = 0;
+
+        LOG_DEBUG("trying to expand cow file with %llu bytes", append_size);
+
+        ret = file_allocate(cm->dfilp, cm->dev, cm->file_size, append_size, &actual);
+
+        if(actual != append_size){
+                LOG_WARN("cow file was not expanded to requested size (req: %llu, act: %llu)", append_size, actual);
+        }
+
+        cm->file_size = cm->file_size + actual;
+
+        if (ret){
+                LOG_ERROR(ret, "unable to expand cow file");
+                return ret;
+        }
+
+        return 0;
+}
+
+struct cow_auto_expand_manager* cow_auto_expand_manager_init(void){
+        struct cow_auto_expand_manager* aem = kzalloc(sizeof(struct cow_auto_expand_manager), GFP_KERNEL);
+        if(!aem){
+                LOG_ERROR(-ENOMEM, "error allocating cow auto expand manager");
+                return ERR_PTR(-ENOMEM);
+        }
+
+        mutex_init(&aem->lock);
+
+        return aem;
+}
+
+int cow_auto_expand_manager_reconfigure(struct cow_auto_expand_manager* aem, uint64_t step_size, long steps){
+        mutex_lock(&aem->lock);
+        aem->step_size = step_size;
+        aem->steps = steps;
+        mutex_unlock(&aem->lock);
+        return 0;
+}
+
+/*
+* cow_auto_expand_manager_test_and_dec() - Tests if the auto expand manager has steps remaining and decrements the steps if so.
+*
+* @aem: The &struct cow_auto_expand_manager to test and decrement.
+*
+* Return:
+* 0 - no steps remaining
+* !0 - size to expand the cow file by
+*/
+uint64_t cow_auto_expand_manager_test_and_dec(struct cow_auto_expand_manager* aem){
+        uint64_t ret;
+
+        ret = 0;
+        mutex_lock(&aem->lock);
+        if(aem->steps > 0){
+                aem->steps--;
+                ret = aem->step_size;
+        }else if(aem->steps == -1){
+                // infinite steps
+                ret = aem->step_size;
+        }
+        mutex_unlock(&aem->lock);
+
+        return ret;
+}
+
+void cow_auto_expand_manager_free(struct cow_auto_expand_manager* aem){
+        mutex_destroy(&aem->lock);
+        kfree(aem);
 }
