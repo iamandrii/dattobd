@@ -963,7 +963,7 @@ retry:
                         if(!kstatfs_ret){
                                 expand_allowance = cow_auto_expand_manager_get_allowance(cm->auto_expand, kstatfs.f_bavail, (uint64_t) kstatfs.f_bsize);
                         }else{
-                                LOG_WARN("failed to get kstatfs with error code %d, expansion allowance won't consider reserved space", kstatfs_ret);
+                                LOG_WARN("failed to get kstatfs with error code %d, expansion allowance is given only if reserved space is 0.", kstatfs_ret);
                                 expand_allowance = cow_auto_expand_manager_get_allowance_no_reserved(cm->auto_expand);
                         }
 
@@ -1292,7 +1292,8 @@ uint64_t cow_auto_expand_manager_get_allowance(struct cow_auto_expand_manager* a
 }
 
 /*
-* cow_auto_expand_manager_get_allowance_no_reserved() - Tests if the auto expand manager has steps remaining without considering reserved space.
+* cow_auto_expand_manager_get_allowance_free_unknown() - Tests if the auto expand manager has steps remaining if the free space is not available.
+* Allows to make an auto-expand if the reserved space is 0.
 *
 * @aem: The &struct cow_auto_expand_manager.
 *
@@ -1300,14 +1301,15 @@ uint64_t cow_auto_expand_manager_get_allowance(struct cow_auto_expand_manager* a
 * 0 - no steps remaining
 * !0 - size to expand the cow file by
 */
-uint64_t cow_auto_expand_manager_get_allowance_no_reserved(struct cow_auto_expand_manager* aem){
+uint64_t cow_auto_expand_manager_get_allowance_free_unknown(struct cow_auto_expand_manager* aem){
         #define mib_to_bytes(a) ((a)*1024*1024)
         
         uint64_t ret;
 
         ret = 0;
         mutex_lock(&aem->lock);
-        if(aem->step_size_mib){
+        // We allow COW-File Auto-Expansion when free space is unknown only for cases where reserved space is 0
+        if(aem->step_size_mib && aem->reserved_space_mib == 0){
                 ret = mib_to_bytes(aem->step_size_mib);
         }
         mutex_unlock(&aem->lock);

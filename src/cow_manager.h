@@ -118,7 +118,7 @@ int cow_auto_expand_manager_reconfigure(struct cow_auto_expand_manager* aem, uin
 
 uint64_t cow_auto_expand_manager_get_allowance(struct cow_auto_expand_manager* aem, uint64_t available_blocks, uint64_t block_size_bytes);
 
-uint64_t cow_auto_expand_manager_get_allowance_no_reserved(struct cow_auto_expand_manager* aem);
+uint64_t cow_auto_expand_manager_get_allowance_free_unknown(struct cow_auto_expand_manager* aem);
 
 void cow_auto_expand_manager_free(struct cow_auto_expand_manager* aem);
 
