@@ -92,7 +92,7 @@ static struct block_device *_blkdev_get_by_path(const char *pathname, fmode_t mo
 #endif
 
 /**
- * dattodb_blkdev_by_path() - Fetches the @block_device struct associated with the
+ * dattobd_blkdev_by_path() - Fetches the @block_device struct associated with the
  * @path. This function uses different methods based on available kernel functions
  * to retrieve the block device. Returns @bdev_handle struct which contains
  * information about @block_device and @holder. Made to be in compliance with kernel
@@ -106,7 +106,7 @@ static struct block_device *_blkdev_get_by_path(const char *pathname, fmode_t mo
  * On success the @bdev_handle structure otherwise an error created via
  * ERR_PTR().
  */
-struct bdev_handle *dattodb_blkdev_by_path(const char *path, fmode_t mode,
+struct bdev_handle *dattobd_blkdev_by_path(const char *path, fmode_t mode,
                                         void *holder)
 {
 #if defined HAVE_BDEV_OPEN_BY_PATH

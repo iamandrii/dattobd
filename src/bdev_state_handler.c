@@ -121,7 +121,7 @@ int __handle_bdev_mount_writable(const char *dir_name,
                 if (test_bit(UNVERIFIED, &dev->sd_state)) {
                         // get the block device for the unverified tracer we are
                         // looking into
-                        cur_bdev = dattodb_blkdev_by_path(dev->sd_bdev_path,
+                        cur_bdev = dattobd_blkdev_by_path(dev->sd_bdev_path,
                                                       FMODE_READ, NULL);
                         if (IS_ERR(cur_bdev)) {
                                 cur_bdev = NULL;
@@ -260,7 +260,7 @@ void post_umount_check(int dormant_ret, int umount_ret, unsigned int idx,
         // reactivate
         if (umount_ret) {
                 struct bdev_handle *bdev_h;
-                bdev_h = dattodb_blkdev_by_path(dev->sd_bdev_path, FMODE_READ, NULL);
+                bdev_h = dattobd_blkdev_by_path(dev->sd_bdev_path, FMODE_READ, NULL);
                 if (IS_ERR_OR_NULL(bdev_h)) {
                         LOG_DEBUG("device gone, moving to error state");
                         tracer_set_fail_state(dev, -ENODEV);

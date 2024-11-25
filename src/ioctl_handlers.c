@@ -101,7 +101,7 @@ int __verify_bdev_writable(const char *bdev_path, int *out)
         struct super_block *sb;
 
         // open the base block device
-        bdev_h = dattodb_blkdev_by_path(bdev_path, FMODE_READ, NULL);
+        bdev_h = dattobd_blkdev_by_path(bdev_path, FMODE_READ, NULL);
 
         if (IS_ERR(bdev_h)) {
                 *out = 0;

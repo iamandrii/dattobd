@@ -37,7 +37,7 @@ struct bdev_handle{
 #endif
 
 
-struct bdev_handle *dattodb_blkdev_by_path(const char *path, fmode_t mode,
+struct bdev_handle *dattobd_blkdev_by_path(const char *path, fmode_t mode,
                                         void *holder);
 
 struct super_block *dattobd_get_super(struct block_device * bd);
