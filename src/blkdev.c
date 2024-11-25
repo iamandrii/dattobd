@@ -8,7 +8,7 @@
 #include "logging.h"
 #include <linux/version.h>
 
-#if !defined HAVE_BLKDEV_GET_BY_PATH && !defined HAVE_BLKDEV_GET_BY_PATH_4 && !defined HAVE_BDEV_OPEN_BY_PATH
+#if !defined HAVE_BLKDEV_GET_BY_PATH && !defined HAVE_BLKDEV_GET_BY_PATH_4 && !defined HAVE_BDEV_OPEN_BY_PATH && !defined HAVE_BDEV_FILE_OPEN_BY_PATH
 
 /**
  * dattobd_lookup_bdev() - Looks up the inode associated with the path, verifies
@@ -106,32 +106,30 @@ static struct block_device *_blkdev_get_by_path(const char *pathname, fmode_t mo
  * On success the @bdev_handle structure otherwise an error created via
  * ERR_PTR().
  */
-struct bdev_handle *dattobd_blkdev_by_path(const char *path, fmode_t mode,
+struct bdev_wrapper *dattobd_blkdev_by_path(const char *path, fmode_t mode,
                                         void *holder)
 {
-#if defined HAVE_BDEV_OPEN_BY_PATH
-        return bdev_open_by_path(path, mode, holder, NULL);
-#else
-        struct bdev_handle *bh = kmalloc(sizeof(struct bdev_handle), GFP_KERNEL);
-        if(IS_ERR_OR_NULL(bh)){
-                return ERR_PTR(-ENOMEM);
-        }
-#if defined HAVE_BLKDEV_GET_BY_PATH_4
-        bh->bdev = blkdev_get_by_path(path, mode, holder, NULL);
-#elif defined HAVE_BLKDEV_GET_BY_PATH
-        bh->bdev = blkdev_get_by_path(path, mode, holder);
-#else
-        bh->bdev = _blkdev_get_by_path(path, mode, holder);
-#endif
-        if(unlikely(IS_ERR_OR_NULL(bh->bdev))){
-                void* error = bh->bdev;
-                kfree(bh);
-                return error;
-        }
-        bh->holder = holder;
-        return bh;
+        struct bdev_wrapper *bw = kmalloc(sizeof(struct bdev_wrapper), GFP_KERNEL);
 
-#endif //HAVE_BDEV_OPEN_BY_PATH
+        if(IS_ERR_OR_NULL(bw)){
+                return ERR_PTR(-ENOMEM);
+        } 
+
+#if defined HAVE_BDEV_OPEN_BY_PATH
+        bw->_internal.handle = bdev_open_by_path(path, mode, holder, NULL);
+        bw->bdev = bw->_internal.handle->bdev;
+#elif defined HAVE_BLKDEV_GET_BY_PATH_4
+        bw->bdev = blkdev_get_by_path(path, mode, holder, NULL);
+#elif defined HAVE_BLKDEV_GET_BY_PATH
+        bw->bdev = blkdev_get_by_path(path, mode, holder);
+#elif defined HAVE_BDEV_FILE_OPEN_BY_PATH
+        bw->_internal.file = bdev_file_open_by_path(path, mode, holder, NULL);
+        bw->bdev = file_bdev(bw->_internal.file);
+#else
+        bw->bdev = _blkdev_get_by_path(path, mode, holder);
+#endif
+
+        return bw;
 }
 
 /**
@@ -148,14 +146,15 @@ struct super_block *dattobd_get_super(struct block_device * bd)
 {
 #if defined HAVE_BD_SUPER
         return (bd != NULL) ? bd->bd_super : NULL;
-
 #elif defined HAVE_GET_SUPER
         return get_super(bdev);
 #elif LINUX_VERSION_CODE >= KERNEL_VERSION(6,6,0)
         return (struct super_block*)(bd -> bd_holder);
-#else
+#elif GET_ACTIVE_SUPER_ADDR != 0
         struct super_block* (*get_active_superblock)(struct block_device*)= (GET_ACTIVE_SUPER_ADDR != 0) ? (struct super_block* (*)(struct block_device*))(GET_ACTIVE_SUPER_ADDR +(long long)(((void*)kfree)-(void*)KFREE_ADDR)):NULL;
         return get_active_superblock(bd);
+#else
+        #error "Could not determine super block of block device"
 #endif
 }
 
@@ -173,13 +172,14 @@ void dattobd_drop_super(struct super_block *sb)
 {
 #if defined HAVE_BD_SUPER
         return;
-
 #elif defined HAVE_GET_SUPER
         return drop_super(sb);
 #elif LINUX_VERSION_CODE >= KERNEL_VERSION(6,6,0)
         return;
-#else
+#elif GET_ACTIVE_SUPER_ADDR != 0
         return;
+#else
+        #error "Could not determine super block of block device"
 #endif
 }
 
@@ -193,22 +193,25 @@ void dattobd_drop_super(struct super_block *sb)
  * Return:
  * void.
  */
-void dattobd_blkdev_put(struct bdev_handle *bh) 
+void dattobd_blkdev_put(struct bdev_wrapper *bw) 
 {
-#if defined HAVE_BDEV_RELEASE
-        return bdev_release(bh);
-#else
-        struct block_device* bd = bh->bdev;
-        kfree(bh);
-#if defined HAVE_BLKDEV_PUT_1
-        return blkdev_put(bd);
-#elif defined HAVE_BLKDEV_PUT_2
-        return blkdev_put(bd, NULL);
-#else
-        return blkdev_put(bd, FMODE_READ);
-#endif
+        if(unlikely(IS_ERR_OR_NULL(bw)))
+                return;
 
-#endif //HAVE_BDEV_RELEASE
+#ifdef USE_BDEV_AS_FILE
+        if(bw->_internal.file)
+                bdev_fput(bw->_internal.file);
+#elif defined HAVE_BDEV_RELEASE
+        if(bw->_internal.handle)
+                bdev_release(bw->_internal.handle);
+#elif defined HAVE_BLKDEV_PUT_1
+        blkdev_put(bw->bdev);
+#elif defined HAVE_BLKDEV_PUT_2
+        blkdev_put(bw->bdev, NULL);
+#else
+        blkdev_put(bw->bdev, FMODE_READ);
+#endif
+        kfree(bw);
 }
 
 /**
@@ -243,7 +246,7 @@ int dattobd_get_start_sect_by_gendisk_for_bio(struct gendisk* gd, u8 partno, sec
         LOG_ERROR(-1, "Unreachable code.");
         return -1;
 #else
-        #error Could not determine starting sector of partition by gendisk and partition number
+        #error "Could not determine starting sector of partition by gendisk and partition number"
 #endif
 }
 

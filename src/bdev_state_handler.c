@@ -105,7 +105,7 @@ int __handle_bdev_mount_writable(const char *dir_name,
         int ret;
         unsigned int i;
         struct snap_device *dev;
-        struct bdev_handle *cur_bdev;
+        struct bdev_wrapper *cur_bdev;
 
         LOG_DEBUG("ENTER %s", __func__);
         tracer_for_each(dev, i)
@@ -259,15 +259,15 @@ void post_umount_check(int dormant_ret, int umount_ret, unsigned int idx,
         // if we successfully went dormant, but the umount call failed,
         // reactivate
         if (umount_ret) {
-                struct bdev_handle *bdev_h;
-                bdev_h = dattobd_blkdev_by_path(dev->sd_bdev_path, FMODE_READ, NULL);
-                if (IS_ERR_OR_NULL(bdev_h)) {
+                struct bdev_wrapper *bdev_w;
+                bdev_w = dattobd_blkdev_by_path(dev->sd_bdev_path, FMODE_READ, NULL);
+                if (IS_ERR_OR_NULL(bdev_w)) {
                         LOG_DEBUG("device gone, moving to error state");
                         tracer_set_fail_state(dev, -ENODEV);
                         return;
                 }
 
-                dattobd_blkdev_put(bdev_h);
+                dattobd_blkdev_put(bdev_w);
 
                 LOG_DEBUG("umount call failed, reactivating tracer %u", idx);
                 auto_transition_active(idx, dir_name);
