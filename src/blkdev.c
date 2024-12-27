@@ -144,10 +144,10 @@ struct bdev_wrapper *dattobd_blkdev_by_path(const char *path, fmode_t mode,
  */
 struct super_block *dattobd_get_super(struct block_device * bd)
 {
-#if defined HAVE_BD_SUPER
-        return (bd != NULL) ? bd->bd_super : NULL;
-#elif defined HAVE_GET_SUPER
-        return get_super(bdev);
+#if defined HAVE_GET_SUPER
+        return get_super(bd);
+#elif defined HAVE_BD_SUPER
+        return (!IS_ERR_OR_NULL(bd)) ? bd->bd_super : bd;
 #elif LINUX_VERSION_CODE >= KERNEL_VERSION(6,6,0)
         return (struct super_block*)(bd -> bd_holder);
 #elif GET_ACTIVE_SUPER_ADDR != 0
@@ -170,10 +170,10 @@ struct super_block *dattobd_get_super(struct block_device * bd)
  */
 void dattobd_drop_super(struct super_block *sb) 
 {
-#if defined HAVE_BD_SUPER
-        return;
-#elif defined HAVE_GET_SUPER
+#if defined HAVE_GET_SUPER
         return drop_super(sb);
+#elif defined HAVE_BD_SUPER
+        return;
 #elif LINUX_VERSION_CODE >= KERNEL_VERSION(6,6,0)
         return;
 #elif GET_ACTIVE_SUPER_ADDR != 0

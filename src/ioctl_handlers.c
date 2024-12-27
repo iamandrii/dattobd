@@ -109,7 +109,7 @@ int __verify_bdev_writable(const char *bdev_path, int *out)
         }
 
         sb = dattobd_get_super(bdev_w->bdev);
-        if (sb) {
+        if (!IS_ERR_OR_NULL(sb)) {
                 writable = !(sb->s_flags & MS_RDONLY);
                 dattobd_drop_super(sb);
         }
