@@ -111,7 +111,7 @@ struct bdev_wrapper *dattobd_blkdev_by_path(const char *path, fmode_t mode,
 {
         struct bdev_wrapper *bw = kmalloc(sizeof(struct bdev_wrapper), GFP_KERNEL);
 
-        if(IS_ERR_OR_NULL(bw)){
+        if(!bw){
                 return ERR_PTR(-ENOMEM);
         } 
 
