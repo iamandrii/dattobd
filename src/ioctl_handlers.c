@@ -22,9 +22,9 @@
 #include <uapi/linux/mount.h>
 #endif
 
-#define verify_minor_available(minor) __verify_minor(minor, 0)
-#define verify_minor_in_use_not_busy(minor) __verify_minor(minor, 1)
-#define verify_minor_in_use(minor) __verify_minor(minor, 2)
+#define verify_minor_available(minor, snap_devices) __verify_minor(minor, 0, snap_devices)
+#define verify_minor_in_use_not_busy(minor, snap_devices) __verify_minor(minor, 1, snap_devices)
+#define verify_minor_in_use(minor, snap_devices) __verify_minor(minor, 2, snap_devices)
 
 #define ioctl_setup_snap(minor, bdev_path, cow_path, fallocated_space,         \
                          cache_size)                                           \
@@ -53,7 +53,7 @@ struct mutex ioctl_mutex;
  * * 0 - successfully validated.
  * * 1 - a negative errno otherwise.
  */
-static int __verify_minor(unsigned int minor, int mode)
+static int __verify_minor(unsigned int minor, int mode, snap_device_array snap_devices)
 {
         // check minor number is within range
         if (minor >= dattobd_max_snap_devices) {
@@ -148,8 +148,10 @@ int __ioctl_setup(unsigned int minor, const char *bdev_path,
                   (is_reload) ? "reload" : "setup", (is_snap) ? "snap" : "inc",
                   minor, bdev_path, cow_path);
 
+        snap_device_array_mut snap_devices = get_snap_device_array_mut();
+
         // verify that the minor number is valid
-        ret = verify_minor_available(minor);
+        ret = verify_minor_available(minor, snap_devices);
         if (ret){
                  LOG_ERROR(ret, "verify_minor_available");
                 goto error;
@@ -183,14 +185,14 @@ int __ioctl_setup(unsigned int minor, const char *bdev_path,
                         ret = tracer_setup_active_snap(dev, minor, bdev_path,
                                                        cow_path,
                                                        fallocated_space,
-                                                       cache_size);
+                                                       cache_size, snap_devices);
                 else
                         ret = tracer_setup_unverified_snap(
-                                dev, minor, bdev_path, cow_path, cache_size);
+                                dev, minor, bdev_path, cow_path, cache_size, snap_devices);
         } else {
                 if (!is_mounted)
                         ret = tracer_setup_unverified_inc(dev, minor, bdev_path,
-                                                          cow_path, cache_size);
+                                                          cow_path, cache_size, snap_devices);
                 else {
                         ret = -EINVAL;
                         LOG_ERROR(ret,
@@ -202,12 +204,14 @@ int __ioctl_setup(unsigned int minor, const char *bdev_path,
         if (ret)
                 goto error;
 
+        put_snap_device_array_mut(snap_devices);
         return 0;
 
 error:
         LOG_ERROR(ret, "error during setup ioctl handler");
         if (dev)
                 kfree(dev);
+        put_snap_device_array_mut(snap_devices);
         return ret;
 }
 
@@ -228,16 +232,20 @@ int ioctl_destroy(unsigned int minor)
 
         LOG_DEBUG("received destroy ioctl - %u", minor);
 
+        snap_device_array_mut snap_devices = get_snap_device_array_mut();
+
         // verify that the minor number is valid
-        ret = verify_minor_in_use_not_busy(minor);
+        ret = verify_minor_in_use_not_busy(minor, snap_devices);
         if (ret) {
                 LOG_ERROR(ret, "error during destroy ioctl handler");
                 return ret;
         }
 
         dev = snap_devices[minor];
-        tracer_destroy(snap_devices[minor]);
+        tracer_destroy(dev, snap_devices);
         kfree(dev);
+
+        put_snap_device_array_mut(snap_devices);
 
         return 0;
 }
@@ -259,8 +267,10 @@ int ioctl_transition_inc(unsigned int minor)
 
         LOG_DEBUG("received transition inc ioctl - %u", minor);
 
+        snap_device_array_mut snap_devices = get_snap_device_array_mut();
+
         // verify that the minor number is valid
-        ret = verify_minor_in_use_not_busy(minor);
+        ret = verify_minor_in_use_not_busy(minor, snap_devices);
         if (ret)
                 goto error;
 
@@ -282,14 +292,17 @@ int ioctl_transition_inc(unsigned int minor)
                 goto error;
         }
 
-        ret = tracer_active_snap_to_inc(dev);
+        ret = tracer_active_snap_to_inc(dev, snap_devices);
         if (ret)
                 goto error;
+
+        put_snap_device_array_mut(snap_devices);
 
         return 0;
 
 error:
         LOG_ERROR(ret, "error during transition to incremental ioctl handler");
+        put_snap_device_array_mut(snap_devices);
         return ret;
 }
 
@@ -317,8 +330,10 @@ int ioctl_transition_snap(unsigned int minor, const char *cow_path,
 
         LOG_DEBUG("received transition snap ioctl - %u : %s", minor, cow_path);
 
+        snap_device_array_mut snap_devices = get_snap_device_array_mut();
+
         // verify that the minor number is valid
-        ret = verify_minor_in_use_not_busy(minor);
+        ret = verify_minor_in_use_not_busy(minor, snap_devices);
         if (ret)
                 goto error;
 
@@ -340,9 +355,11 @@ int ioctl_transition_snap(unsigned int minor, const char *cow_path,
                 goto error;
         }
 
-        ret = tracer_active_inc_to_snap(dev, cow_path, fallocated_space);
+        ret = tracer_active_inc_to_snap(dev, cow_path, fallocated_space, snap_devices);
         if (ret)
                 goto error;
+
+        put_snap_device_array_mut(snap_devices);
 
         return 0;
 
@@ -368,8 +385,10 @@ int ioctl_reconfigure(unsigned int minor, unsigned long cache_size)
 
         LOG_DEBUG("received reconfigure ioctl - %u : %lu", minor, cache_size);
 
+        snap_device_array snap_devices = get_snap_device_array();
+
         // verify that the minor number is valid
-        ret = verify_minor_in_use_not_busy(minor);
+        ret = verify_minor_in_use_not_busy(minor, snap_devices);
         if (ret)
                 goto error;
 
@@ -383,6 +402,8 @@ int ioctl_reconfigure(unsigned int minor, unsigned long cache_size)
         }
 
         tracer_reconfigure(dev, cache_size);
+
+        put_snap_device_array(snap_devices);
 
         return 0;
 
@@ -407,8 +428,10 @@ int ioctl_expand_cow_file(uint64_t size, unsigned int minor)
 
         LOG_DEBUG("received expand cow file ioctl - %u : %llu", minor, size);
 
+        snap_device_array snap_devices = get_snap_device_array();
+
         // verify that the minor number is valid
-        ret = verify_minor_in_use(minor);
+        ret = verify_minor_in_use(minor, snap_devices);
         if (ret)
                 goto error;
 
@@ -432,6 +455,8 @@ int ioctl_expand_cow_file(uint64_t size, unsigned int minor)
         }
 
         ret = tracer_expand_cow_file_no_check(dev, size * 1024 * 1024);
+
+        put_snap_device_array(snap_devices);
 
         if(ret)
                 goto error;
@@ -460,8 +485,10 @@ int ioctl_reconfigure_auto_expand(uint64_t step_size, uint64_t reserved_space, u
 
         LOG_DEBUG("received reconfigure auto expand ioctl - %u : %llu, %llu", minor, step_size, reserved_space);
 
+        snap_device_array snap_devices = get_snap_device_array();
+
         // verify that the minor number is valid
-        ret = verify_minor_in_use(minor);
+        ret = verify_minor_in_use(minor, snap_devices);
         if (ret)
                 goto error;
 
@@ -495,6 +522,8 @@ int ioctl_reconfigure_auto_expand(uint64_t step_size, uint64_t reserved_space, u
 
         ret = cow_auto_expand_manager_reconfigure(dev->sd_cow->auto_expand, step_size, reserved_space);
 
+        put_snap_device_array(snap_devices);
+
         if(ret)
                 goto error;
 
@@ -522,14 +551,18 @@ int ioctl_dattobd_info(struct dattobd_info *info)
 
         LOG_DEBUG("received dattobd info ioctl - %u", info->minor);
 
+        snap_device_array snap_devices = get_snap_device_array();
+
         // verify that the minor number is valid
-        ret = verify_minor_in_use(info->minor);
+        ret = verify_minor_in_use(info->minor, snap_devices);
         if (ret)
                 goto error;
 
         dev = snap_devices[info->minor];
 
         tracer_dattobd_info(dev, info);
+
+        put_snap_device_array(snap_devices);
 
         return 0;
 
@@ -547,14 +580,21 @@ int get_free_minor(void)
 {
         struct snap_device *dev;
         int i;
+        bool found = false;
+
+        snap_device_array snap_devices = get_snap_device_array();
 
         tracer_for_each_full(dev, i)
         {
-                if (!dev)
-                        return i;
+                if (!dev){
+                        found = true;
+                        break;
+                }
         }
 
-        return -ENOENT;
+        put_snap_device_array(snap_devices);
+
+        return (found ? i : -ENOENT);
 }
 
 /**

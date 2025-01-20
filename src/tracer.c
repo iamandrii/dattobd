@@ -136,13 +136,13 @@ static inline BIO_REQUEST_CALLBACK_FN *dattobd_get_bd_fn(
 #endif
 
 #define tracer_setup_unverified_inc(dev, minor, bdev_path, cow_path,           \
-                                    cache_size)                                \
+                                    cache_size, snap_devices)                                \
         __tracer_setup_unverified(dev, minor, bdev_path, cow_path, cache_size, \
-                                  0)
+                                  0, snap_devices)
 #define tracer_setup_unverified_snap(dev, minor, bdev_path, cow_path,          \
-                                     cache_size)                               \
+                                     cache_size, snap_devices)                               \
         __tracer_setup_unverified(dev, minor, bdev_path, cow_path, cache_size, \
-                                  1)
+                                  1, snap_devices)
 
 #define ROUND_UP(x, chunk) ((((x) + (chunk)-1) / (chunk)) * (chunk))
 #define ROUND_DOWN(x, chunk) (((x) / (chunk)) * (chunk))
@@ -389,7 +389,7 @@ out:
  * * 0 - not being traced
  * * 1 - already being traced
  */
-static int bdev_is_already_traced(const struct block_device *bdev)
+static int bdev_is_already_traced(const struct block_device *bdev, snap_device_array snap_devices)
 {
         int i;
         struct snap_device *dev;
@@ -435,7 +435,7 @@ static int file_is_on_bdev(const struct dattobd_mutable_file *dfilp, struct bloc
  * minor_range_recalculate() - Updates the device minors tracked by this
  * driver.  This must be done whenever a minor number is no longer in use.
  */
-static void minor_range_recalculate(void)
+static void minor_range_recalculate(snap_device_array snap_devices)
 {
         unsigned int i, highest = 0, lowest = dattobd_max_snap_devices - 1;
         struct snap_device *dev;
@@ -724,7 +724,7 @@ static void __tracer_destroy_base_dev(struct snap_device *dev)
  * * !0 - errno indicating the error
  */
 static int __tracer_setup_base_dev(struct snap_device *dev,
-                                   const char *bdev_path)
+                                   const char *bdev_path, snap_device_array snap_devices)
 {
         int ret;
 
@@ -744,7 +744,7 @@ static int __tracer_setup_base_dev(struct snap_device *dev,
 
         // check block device is not already being traced
         LOG_DEBUG("checking block device is not already being traced");
-        if (bdev_is_already_traced(dev->sd_base_dev->bdev)) {
+        if (bdev_is_already_traced(dev->sd_base_dev->bdev, snap_devices)) {
                 ret = -EINVAL;
                 LOG_ERROR(ret, "block device is already being traced");
                 goto error;
@@ -1407,6 +1407,8 @@ static MRF_RETURN_TYPE tracing_fn(struct request_queue *q, struct bio *bio)
         MAYBE_UNUSED(ret);
         make_request_fn* orig_fn = NULL;
 
+        snap_device_array snap_devices = get_snap_device_array_nolock();
+
         smp_rmb();
         tracer_for_each(dev, i)
         {
@@ -1463,6 +1465,7 @@ static MRF_RETURN_TYPE tracing_fn(struct request_queue *q, struct bio *bio)
 #endif
 
 out:
+		put_snap_device_array_nolock(snap_devices);
         MRF_RETURN(ret);
 }
 
@@ -1481,7 +1484,7 @@ out:
  * * !0 - errno indicating the error
  */
 static int dattobd_find_orig_mrf(struct block_device *bdev,
-                                 make_request_fn **mrf){
+                                 make_request_fn **mrf, snap_device_array snap_devices){
         int i;
         struct snap_device *dev;
         struct request_queue *q = bdev_get_queue(bdev);
@@ -1512,7 +1515,7 @@ static int dattobd_find_orig_mrf(struct block_device *bdev,
         return -EFAULT;
 }
 #else
-int find_orig_bdops(struct block_device *bdev, struct block_device_operations **ops, make_request_fn **mrf, struct tracing_ops** trops){
+int find_orig_bdops(struct block_device *bdev, struct block_device_operations **ops, make_request_fn **mrf, struct tracing_ops** trops, snap_device_array snap_devices){
         int i;
 	struct snap_device *dev;
 	struct block_device_operations *orig_ops = dattobd_get_bd_ops(bdev);
@@ -1590,7 +1593,7 @@ int tracer_alloc_ops(struct snap_device* dev){
  * * 0 - success
  * * !0 - errno indicating the error
  */
-static int __tracer_should_reset_mrf(const struct snap_device *dev)
+static int __tracer_should_reset_mrf(const struct snap_device* dev, snap_device_array snap_devices)
 {
     int i;
     struct snap_device *cur_dev;
@@ -1601,7 +1604,6 @@ static int __tracer_should_reset_mrf(const struct snap_device *dev)
 #else
         struct block_device_operations* ops=dattobd_get_bd_ops(dev->sd_base_dev->bdev);
 #endif
-    if (dev != snap_devices[dev->sd_minor]) return 0;
 
     //return 0 if there is another device tracing the same queue as dev.
     if (snap_devices){
@@ -1626,11 +1628,11 @@ static int __tracer_should_reset_mrf(const struct snap_device *dev)
  *
  * @dev: The &struct snap_device object pointer.
  */
-static void __tracer_destroy_tracing(struct snap_device *dev)
+static void __tracer_destroy_tracing(struct snap_device *dev, snap_device_array_mut snap_devices)
 {
         if(dev->sd_orig_request_fn){
                 LOG_DEBUG("replacing make_request_fn if needed");
-                if(__tracer_should_reset_mrf(dev)){
+                if(__tracer_should_reset_mrf(dev, snap_devices)){
                         LOG_DEBUG("__tracer_should_reset_mrf is true");
 
                 if (!test_bit(ACTIVE, &dev->sd_state)) {
@@ -1692,7 +1694,7 @@ static void __tracer_destroy_tracing(struct snap_device *dev)
         }
 
         dev->sd_minor = 0;
-        minor_range_recalculate();
+        minor_range_recalculate(snap_devices);
 }
 
 /**
@@ -1704,7 +1706,7 @@ static void __tracer_destroy_tracing(struct snap_device *dev)
  * @minor: the device's minor number.
  */
 static void __tracer_setup_tracing_unverified(struct snap_device *dev,
-                                              unsigned int minor)
+                                              unsigned int minor, snap_device_array_mut snap_devices)
 {
         minor_range_include(minor);
         smp_wmb();
@@ -1726,7 +1728,7 @@ static void __tracer_setup_tracing_unverified(struct snap_device *dev,
  * * 0 - success
  * * !0 - errno indicating the error
  */
-int __tracer_setup_tracing(struct snap_device *dev, unsigned int minor)
+int __tracer_setup_tracing(struct snap_device *dev, unsigned int minor, snap_device_array_mut snap_devices)
 {
         int ret = 0;
 
@@ -1737,7 +1739,7 @@ int __tracer_setup_tracing(struct snap_device *dev, unsigned int minor)
         LOG_DEBUG("getting the base block device's make_request_fn");
 
 #ifndef USE_BDOPS_SUBMIT_BIO
-        ret = dattobd_find_orig_mrf(dev->sd_base_dev->bdev, &dev->sd_orig_request_fn);
+        ret = dattobd_find_orig_mrf(dev->sd_base_dev->bdev, &dev->sd_orig_request_fn, snap_devices);
         if (ret)
                 goto error;
         ret = __tracer_transition_tracing(
@@ -1748,7 +1750,7 @@ int __tracer_setup_tracing(struct snap_device *dev, unsigned int minor)
                 true);
 #else
         if(!dev->sd_tracing_ops){
-                ret=find_orig_bdops(dev->sd_base_dev->bdev, &dev->bd_ops,&dev->sd_orig_request_fn, &dev->sd_tracing_ops);
+                ret=find_orig_bdops(dev->sd_base_dev->bdev, &dev->bd_ops,&dev->sd_orig_request_fn, &dev->sd_tracing_ops, snap_devices);
                 if(ret) goto error;
 
                 if(!dev->sd_tracing_ops){
@@ -1780,7 +1782,7 @@ error:
         LOG_ERROR(ret, "error setting up tracing");
         dev->sd_minor = 0;
         dev->sd_orig_request_fn = NULL;
-        minor_range_recalculate();
+        minor_range_recalculate(snap_devices);
         return ret;
 }
 
@@ -1800,7 +1802,7 @@ error:
  */
 int __tracer_setup_unverified(struct snap_device *dev, unsigned int minor,
                               const char *bdev_path, const char *cow_path,
-                              unsigned long cache_size, int is_snap)
+                              unsigned long cache_size, int is_snap, snap_device_array_mut snap_devices)
 {       
         LOG_DEBUG("Enter __tracer_setup_unverified path %s", bdev_path);
 
@@ -1822,13 +1824,13 @@ int __tracer_setup_unverified(struct snap_device *dev, unsigned int minor,
                 goto error;
 
         // add the tracer to the array of devices
-        __tracer_setup_tracing_unverified(dev, minor);
+        __tracer_setup_tracing_unverified(dev, minor, snap_devices);
 
         return 0;
 
 error:
         LOG_ERROR(-ENOMEM, "error setting up unverified tracer");
-        tracer_destroy(dev);
+        tracer_destroy(dev, snap_devices);
         return -ENOMEM;
 }
 
@@ -1840,9 +1842,9 @@ error:
  *
  * @dev: The &struct snap_device object pointer.
  */
-void tracer_destroy(struct snap_device *dev)
+void tracer_destroy(struct snap_device *dev, snap_device_array_mut snap_devices)
 {
-        __tracer_destroy_tracing(dev);
+        __tracer_destroy_tracing(dev, snap_devices);
         __tracer_destroy_cow_thread(dev);
         __tracer_destroy_snap(dev);
         __tracer_destroy_cow_path(dev);
@@ -1871,7 +1873,7 @@ void tracer_destroy(struct snap_device *dev)
 int tracer_setup_active_snap(struct snap_device *dev, unsigned int minor,
                              const char *bdev_path, const char *cow_path,
                              unsigned long fallocated_space,
-                             unsigned long cache_size)
+                             unsigned long cache_size, snap_device_array_mut snap_devices)
 {
         int ret;
 
@@ -1881,7 +1883,7 @@ int tracer_setup_active_snap(struct snap_device *dev, unsigned int minor,
         clear_bit(UNVERIFIED, &dev->sd_state);
 
         // setup base device
-        ret = __tracer_setup_base_dev(dev, bdev_path);
+        ret = __tracer_setup_base_dev(dev, bdev_path, snap_devices);
         if (ret)
                 goto error;
 
@@ -1917,7 +1919,7 @@ int tracer_setup_active_snap(struct snap_device *dev, unsigned int minor,
         wake_up_process(dev->sd_cow_thread);
 
         // inject the tracing function
-        ret = __tracer_setup_tracing(dev, minor);
+        ret = __tracer_setup_tracing(dev, minor, snap_devices);
         if (ret)
                 goto error;
 
@@ -1925,7 +1927,7 @@ int tracer_setup_active_snap(struct snap_device *dev, unsigned int minor,
 
 error:
         LOG_ERROR(ret, "error setting up tracer as active snapshot");
-        tracer_destroy(dev);
+        tracer_destroy(dev, snap_devices);
         return ret;
 }
 
@@ -1940,7 +1942,7 @@ error:
  * * 0 - success
  * * !0 - errno indicating the error
  */
-int tracer_active_snap_to_inc(struct snap_device *old_dev)
+int tracer_active_snap_to_inc(struct snap_device *old_dev, snap_device_array_mut snap_devices)
 {
         int ret;
         struct snap_device *dev;
@@ -1971,7 +1973,7 @@ int tracer_active_snap_to_inc(struct snap_device *old_dev)
 
         // inject the tracing function
         dev->sd_orig_request_fn = old_dev->sd_orig_request_fn;
-        ret = __tracer_setup_tracing(dev, old_dev->sd_minor);
+        ret = __tracer_setup_tracing(dev, old_dev->sd_minor, snap_devices);
         if (ret)
                 goto error;
 
@@ -2057,7 +2059,7 @@ error:
  * * !0 - error
  */
 int tracer_active_inc_to_snap(struct snap_device *old_dev, const char *cow_path,
-                              unsigned long fallocated_space)
+                              unsigned long fallocated_space, snap_device_array_mut snap_devices)
 {
         int ret;
         struct snap_device *dev;
@@ -2105,7 +2107,7 @@ int tracer_active_inc_to_snap(struct snap_device *old_dev, const char *cow_path,
 
         // start tracing (overwrites old_dev's tracing)
         dev->sd_orig_request_fn = old_dev->sd_orig_request_fn;
-        ret = __tracer_setup_tracing(dev, old_dev->sd_minor);
+        ret = __tracer_setup_tracing(dev, old_dev->sd_minor, snap_devices);
         if (ret)
                 goto error;
 
@@ -2220,7 +2222,7 @@ error:
  * @user_mount_path: A userspace supplied path used to build the COW file path.
  */
 void __tracer_unverified_snap_to_active(struct snap_device *dev,
-                                        const char __user *user_mount_path)
+                                        const char __user *user_mount_path, snap_device_array_mut snap_devices)
 {
         int ret;
         unsigned int minor = dev->sd_minor;
@@ -2230,7 +2232,7 @@ void __tracer_unverified_snap_to_active(struct snap_device *dev,
 
         LOG_DEBUG("ENTER __tracer_unverified_snap_to_active");
         // remove tracing while we setup the struct
-        __tracer_destroy_tracing(dev);
+        __tracer_destroy_tracing(dev, snap_devices);
 
         // mark as active
         set_bit(ACTIVE, &dev->sd_state);
@@ -2240,7 +2242,7 @@ void __tracer_unverified_snap_to_active(struct snap_device *dev,
         dev->sd_cow_path = NULL;
 
         // setup base device
-        ret = __tracer_setup_base_dev(dev, bdev_path);
+        ret = __tracer_setup_base_dev(dev, bdev_path, snap_devices);
         if (ret)
                 goto error;
 
@@ -2284,7 +2286,7 @@ void __tracer_unverified_snap_to_active(struct snap_device *dev,
         wake_up_process(dev->sd_cow_thread);
 
         // inject the tracing function
-        ret = __tracer_setup_tracing(dev, minor);
+        ret = __tracer_setup_tracing(dev, minor, snap_devices);
         if (ret)
                 goto error;
 
@@ -2296,9 +2298,9 @@ void __tracer_unverified_snap_to_active(struct snap_device *dev,
 
 error:
         LOG_ERROR(ret, "error transitioning snapshot tracer to active state");
-        tracer_destroy(dev);
+        tracer_destroy(dev, snap_devices);
         tracer_setup_unverified_snap(dev, minor, bdev_path, rel_path,
-                                     cache_size);
+                                     cache_size, snap_devices);
         tracer_set_fail_state(dev, ret);
         kfree(bdev_path);
         kfree(rel_path);
@@ -2315,7 +2317,7 @@ error:
  * Tracing is configured for the block device after this call completes.
  */
 void __tracer_unverified_inc_to_active(struct snap_device *dev,
-                                       const char __user *user_mount_path)
+                                       const char __user *user_mount_path, snap_device_array_mut snap_devices)
 {
         int ret;
         unsigned int minor = dev->sd_minor;
@@ -2326,7 +2328,7 @@ void __tracer_unverified_inc_to_active(struct snap_device *dev,
         LOG_DEBUG("ENTER %s", __func__);
 
         // remove tracing while we setup the struct
-        __tracer_destroy_tracing(dev);
+        __tracer_destroy_tracing(dev, snap_devices);
 
         // mark as active
         set_bit(ACTIVE, &dev->sd_state);
@@ -2336,7 +2338,7 @@ void __tracer_unverified_inc_to_active(struct snap_device *dev,
         dev->sd_cow_path = NULL;
 
         // setup base device
-        ret = __tracer_setup_base_dev(dev, bdev_path);
+        ret = __tracer_setup_base_dev(dev, bdev_path, snap_devices);
         if (ret)
                 goto error;
 
@@ -2375,7 +2377,7 @@ void __tracer_unverified_inc_to_active(struct snap_device *dev,
         wake_up_process(dev->sd_cow_thread);
 
         // inject the tracing function
-        ret = __tracer_setup_tracing(dev, minor);
+        ret = __tracer_setup_tracing(dev, minor, snap_devices);
         if (ret)
                 goto error;
 
@@ -2387,9 +2389,9 @@ void __tracer_unverified_inc_to_active(struct snap_device *dev,
 
 error:
         LOG_ERROR(ret, "error transitioning incremental to active state");
-        tracer_destroy(dev);
+        tracer_destroy(dev, snap_devices);
         tracer_setup_unverified_inc(dev, minor, bdev_path, rel_path,
-                                    cache_size);
+                                    cache_size, snap_devices);
         tracer_set_fail_state(dev, ret);
         kfree(bdev_path);
         kfree(rel_path);

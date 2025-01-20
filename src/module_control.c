@@ -33,7 +33,7 @@ unsigned int highest_minor;
 unsigned int lowest_minor;
 int major;
 
-struct snap_device **snap_devices;
+// struct snap_device **snap_devices;
 
 /*
  * Global module parameters
@@ -141,21 +141,22 @@ static void unregister_sequential_file_in_proc(void)
  */
 static void deallocate_snap_devices_array(void)
 {
-        LOG_DEBUG("destroying snap devices");
-        if (snap_devices) {
-                int i;
-                struct snap_device *dev;
+        // LOG_DEBUG("destroying snap devices");
+        // if (snap_devices) {
+        //         int i;
+        //         struct snap_device *dev;
 
-                tracer_for_each(dev, i)
-                {
-                        if (dev) {
-                                LOG_DEBUG("destroying minor - %d", i);
-                                tracer_destroy(dev);
-                        }
-                }
-                kfree(snap_devices);
-                snap_devices = NULL;
-        }
+        //         tracer_for_each(dev, i)
+        //         {
+        //                 if (dev) {
+        //                         LOG_DEBUG("destroying minor - %d", i);
+        //                         tracer_destroy(dev);
+        //                 }
+        //         }
+        //         kfree(snap_devices);
+        //         snap_devices = NULL;
+        // }
+        cleanup_snap_device_array();
 }
 
 /**
@@ -243,15 +244,17 @@ static int register_blkdev_and_get_major_number(void)
  */
 static int allocate_snap_devices_array(void)
 {
-        LOG_DEBUG("allocate global device array");
-        snap_devices =
-                kzalloc(dattobd_max_snap_devices * sizeof(struct snap_device *),
-                        GFP_KERNEL);
-        if (!snap_devices) {
-                return -ENOMEM;
-        }
+        // LOG_DEBUG("allocate global device array");
+        // snap_devices =
+        //         kzalloc(dattobd_max_snap_devices * sizeof(struct snap_device *),
+        //                 GFP_KERNEL);
+        // if (!snap_devices) {
+        //         return -ENOMEM;
+        // }
 
-        return 0;
+        // return 0;
+
+        return init_snap_device_array();
 }
 
 /**
