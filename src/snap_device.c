@@ -6,7 +6,7 @@
 #include "tracer_helper.h"
 
 static struct snap_device** snap_devices;
-static spinlock_t snap_device_lock;
+static struct mutex snap_device_lock;
 // static unsigned long snap_device_lock_flags;
 
 int init_snap_device_array(void){
@@ -17,7 +17,7 @@ int init_snap_device_array(void){
     if (!snap_devices) {
             return -ENOMEM;
     }
-    spin_lock_init(&snap_device_lock);
+    mutex_init(&snap_device_lock);
     return 0;
 }
 
@@ -44,12 +44,12 @@ void cleanup_snap_device_array(void){
 }
 
 snap_device_array get_snap_device_array(void){
-    spin_lock(&snap_device_lock);
+    mutex_lock(&snap_device_lock);
     return snap_devices;
 }
 
 snap_device_array_mut get_snap_device_array_mut(void){
-    spin_lock(&snap_device_lock);
+    mutex_lock(&snap_device_lock);
     return snap_devices;
 }
 
@@ -58,12 +58,12 @@ snap_device_array get_snap_device_array_nolock(void){
 }
 
 void put_snap_device_array(snap_device_array _){
-    spin_unlock(&snap_device_lock);
+    mutex_unlock(&snap_device_lock);
     return;
 }
 
 void put_snap_device_array_mut(snap_device_array_mut _){
-    spin_unlock(&snap_device_lock);
+    mutex_unlock(&snap_device_lock);
     return;
 }
 
