@@ -274,6 +274,7 @@ void post_umount_check(int dormant_ret, int umount_ret, unsigned int idx,
                 if (IS_ERR_OR_NULL(bdev_w)) {
                         LOG_DEBUG("device gone, moving to error state");
                         tracer_set_fail_state(dev, -ENODEV);
+                        put_snap_device_array_mut(snap_devices);
                         return;
                 }
 

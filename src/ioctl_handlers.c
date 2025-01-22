@@ -238,6 +238,7 @@ int ioctl_destroy(unsigned int minor)
         ret = verify_minor_in_use_not_busy(minor, snap_devices);
         if (ret) {
                 LOG_ERROR(ret, "error during destroy ioctl handler");
+                put_snap_device_array_mut(snap_devices);
                 return ret;
         }
 
@@ -246,7 +247,6 @@ int ioctl_destroy(unsigned int minor)
         kfree(dev);
 
         put_snap_device_array_mut(snap_devices);
-
         return 0;
 }
 
@@ -297,7 +297,6 @@ int ioctl_transition_inc(unsigned int minor)
                 goto error;
 
         put_snap_device_array_mut(snap_devices);
-
         return 0;
 
 error:
@@ -360,11 +359,11 @@ int ioctl_transition_snap(unsigned int minor, const char *cow_path,
                 goto error;
 
         put_snap_device_array_mut(snap_devices);
-
         return 0;
 
 error:
         LOG_ERROR(ret, "error during transition to snapshot ioctl handler");
+        put_snap_device_array_mut(snap_devices);
         return ret;
 }
 
@@ -404,11 +403,11 @@ int ioctl_reconfigure(unsigned int minor, unsigned long cache_size)
         tracer_reconfigure(dev, cache_size);
 
         put_snap_device_array(snap_devices);
-
         return 0;
 
 error:
         LOG_ERROR(ret, "error during reconfigure ioctl handler");
+        put_snap_device_array(snap_devices);
         return ret;
 }
 
@@ -456,8 +455,6 @@ int ioctl_expand_cow_file(uint64_t size, unsigned int minor)
 
         ret = tracer_expand_cow_file_no_check(dev, size * 1024 * 1024);
 
-        put_snap_device_array(snap_devices);
-
         if(ret)
                 goto error;
 
@@ -465,6 +462,7 @@ int ioctl_expand_cow_file(uint64_t size, unsigned int minor)
 
 error:
         LOG_ERROR(ret, "error during expand cow file ioctl handler");
+        put_snap_device_array(snap_devices);
         return ret;
 }
 
@@ -522,15 +520,15 @@ int ioctl_reconfigure_auto_expand(uint64_t step_size, uint64_t reserved_space, u
 
         ret = cow_auto_expand_manager_reconfigure(dev->sd_cow->auto_expand, step_size, reserved_space);
 
-        put_snap_device_array(snap_devices);
-
         if(ret)
                 goto error;
 
+        put_snap_device_array(snap_devices);
         return 0;
 
 error:
         LOG_ERROR(ret, "error during reconfigure auto expand ioctl handler");
+        put_snap_device_array(snap_devices);
         return ret;
 }
 
@@ -563,11 +561,11 @@ int ioctl_dattobd_info(struct dattobd_info *info)
         tracer_dattobd_info(dev, info);
 
         put_snap_device_array(snap_devices);
-
         return 0;
 
 error:
         LOG_ERROR(ret, "error during reconfigure ioctl handler");
+        put_snap_device_array(snap_devices);
         return ret;
 }
 
