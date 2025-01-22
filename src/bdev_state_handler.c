@@ -258,7 +258,7 @@ void post_umount_check(int dormant_ret, int umount_ret, unsigned int idx,
 {
         struct snap_device *dev;
         struct super_block *sb;
-        snap_device_array_mut snap_devices = get_snap_device_array_mut();
+        snap_device_array_mut snap_devices = NULL;
 
         LOG_DEBUG("ENTER %s", __func__);
         // if we didn't do anything or failed, just return
@@ -266,6 +266,8 @@ void post_umount_check(int dormant_ret, int umount_ret, unsigned int idx,
                 LOG_DEBUG("EXIT %s, dormant_ret", __func__);
                 return;
         }
+
+        snap_devices = get_snap_device_array_mut();
 
         dev = snap_devices[idx];
 
