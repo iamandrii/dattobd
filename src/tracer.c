@@ -1562,9 +1562,10 @@ int find_orig_bdops(struct block_device *bdev, struct block_device_operations **
 }
 
 int tracer_alloc_ops(struct snap_device* dev){
-        LOG_DEBUG("%s", __func__);
         struct tracing_ops* trops;
         trops = kmalloc(sizeof(struct tracing_ops), GFP_KERNEL);
+
+        LOG_DEBUG("%s", __func__);
 	if(!trops) {
 		LOG_ERROR(-ENOMEM, "error allocating tracing ops struct");
 		return -ENOMEM;
@@ -1603,6 +1604,7 @@ static int __tracer_should_reset_mrf(const struct snap_device* dev, snap_device_
     int i;
     struct snap_device *cur_dev;
     struct request_queue *q = bdev_get_queue(dev->sd_base_dev->bdev);
+    MAYBE_UNUSED(q);
 
 #ifndef USE_BDOPS_SUBMIT_BIO
     if (GET_BIO_REQUEST_TRACKING_PTR(dev->sd_base_dev->bdev) != tracing_fn) return 0;
