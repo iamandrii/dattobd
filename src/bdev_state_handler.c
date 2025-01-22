@@ -6,6 +6,7 @@
  * auto_transition_dormant() - Transitions an active snapshot to dormant.
  *
  * @minor: the device's minor number.
+ * @snap_devices: the array of snap devices.
  */
 void auto_transition_dormant(unsigned int minor, snap_device_array snap_devices)
 {
@@ -24,6 +25,7 @@ void auto_transition_dormant(unsigned int minor, snap_device_array snap_devices)
  *
  * @minor: the device's minor number.
  * @dir_name: the user-space supplied directory name of the mount.
+ * @snap_devices: the array of snap devices.
  */
 void auto_transition_active(unsigned int minor, const char *dir_name, snap_device_array_mut snap_devices)
 {
@@ -51,6 +53,7 @@ void auto_transition_active(unsigned int minor, const char *dir_name, snap_devic
  *
  * @mnt: The &struct vfsmount object pointer.
  * @idx_out: Output the minor device number of the transitioned device.
+ * @snap_devices: the array of snap devices.
  *
  * Return:
  * * 0 - success
@@ -94,6 +97,7 @@ out:
  * @dir_name: the user-space suplied directory name of the mount.
  * @bdev: The &struct block_device that stores the COW data.
  * @idx_out: Output the minor device number of the transitioned device.
+ * @snap_devices: the array of snap devices.
  *
  * Return:
  * * 0 - success

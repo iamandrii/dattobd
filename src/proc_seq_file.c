@@ -140,7 +140,6 @@ static void dattobd_proc_stop(struct seq_file *m, void *v)
 {
         put_snap_device_array(current_snap_devices);
         current_snap_devices = NULL;
-        /* Nothing to do since we're iterating through a global array. */
 }
 
 /** dattobd_proc_show() - Outputs information about a @snap_device.  Optionally

@@ -384,6 +384,7 @@ out:
  * &struct block_device in this driver's tracking state.
  *
  * @bdev: The &struct block_device in question.
+ * @snap_devices: the array of snap devices.
  *
  * Return:
  * * 0 - not being traced
@@ -434,6 +435,8 @@ static int file_is_on_bdev(const struct dattobd_mutable_file *dfilp, struct bloc
 /**
  * minor_range_recalculate() - Updates the device minors tracked by this
  * driver.  This must be done whenever a minor number is no longer in use.
+ * 
+ * @snap_devices: the array of snap devices.
  */
 static void minor_range_recalculate(snap_device_array snap_devices)
 {
@@ -718,6 +721,7 @@ static void __tracer_destroy_base_dev(struct snap_device *dev)
  *
  * @dev: The &struct snap_device object pointer.
  * @bdev_path: The block device path, e.g., '/dev/loop0'.
+ * @snap_devices: the array of snap devices.
  *
  * Return:
  * * 0 - success
@@ -1478,6 +1482,7 @@ out:
  *
  * @bdev: The &struct block_device that stores the COW data.
  * @mrf: The original MRF function, if found.
+ * @snap_devices: the array of snap devices.
  *
  * Return:
  * * 0 - success
@@ -1588,6 +1593,7 @@ int tracer_alloc_ops(struct snap_device* dev){
  * __tracer_should_reset_mrf() - Searches the traced devices and verifies that
  * the device would have had a make_request_fn when tracing was initiated.
  * @dev: The &struct snap_device object pointer.
+ * @snap_devices: the array of snap devices.
  *
  * Return:
  * * 0 - success
@@ -1627,6 +1633,7 @@ static int __tracer_should_reset_mrf(const struct snap_device* dev, snap_device_
  *                              function if necessary.
  *
  * @dev: The &struct snap_device object pointer.
+ * @snap_devices: the array of snap devices.
  */
 static void __tracer_destroy_tracing(struct snap_device *dev, snap_device_array_mut snap_devices)
 {
@@ -1704,6 +1711,7 @@ static void __tracer_destroy_tracing(struct snap_device *dev, snap_device_array_
  *
  * @dev: The &struct snap_device object pointer.
  * @minor: the device's minor number.
+ * @snap_devices: the array of snap devices.
  */
 static void __tracer_setup_tracing_unverified(struct snap_device *dev,
                                               unsigned int minor, snap_device_array_mut snap_devices)
@@ -1723,6 +1731,7 @@ static void __tracer_setup_tracing_unverified(struct snap_device *dev,
  *
  * @dev: The &struct snap_device object pointer.
  * @minor: the device's minor number.
+ * @snap_devices: the array of snap devices.
  *
  * Return:
  * * 0 - success
@@ -1795,6 +1804,7 @@ error:
  * @cow_path: The path to the COW backing file.
  * @cache_size: Limits the size of the COW section cache (in bytes).
  * @is_snap: snapshot or incremental.
+ * @snap_devices: the array of snap devices.
  *
  * Return:
  * * 0 - success
@@ -1841,6 +1851,7 @@ error:
  *                    fields in the process.
  *
  * @dev: The &struct snap_device object pointer.
+ * @snap_devices: the array of snap devices.
  */
 void tracer_destroy(struct snap_device *dev, snap_device_array_mut snap_devices)
 {
@@ -1861,6 +1872,7 @@ void tracer_destroy(struct snap_device *dev, snap_device_array_mut snap_devices)
  * @cow_path: The path to the COW backing file.
  * @fallocated_space: A value of zero defaults the size.
  * @cache_size: Limits the size of the COW section cache (in bytes).
+ * @snap_devices: the array of snap devices.
  *
  * This call sets up the snapshot device, creates the COW file including the
  * data region, determines the COW path, sets up the COW thread, and finally
@@ -1937,6 +1949,7 @@ error:
  * tracer_active_snap_to_inc() - Transitions from snapshot mode to incremental
  * tracking.
  * @old_dev: The &struct snap_device being replaced by this call.
+ * @snap_devices: the array of snap devices.
  *
  * Return:
  * * 0 - success
@@ -2053,6 +2066,7 @@ error:
  * @old_dev: The &struct snap_device tracing in incremental mode.
  * @cow_path: The path to the COW backing file.
  * @fallocated_space: A value of zero carries over the current setting.
+ * @snap_devices: the array of snap devices.
  *
  * Return:
  * * 0 - success
@@ -2220,6 +2234,7 @@ error:
  *
  * @dev: The &struct snap_device object pointer.
  * @user_mount_path: A userspace supplied path used to build the COW file path.
+ * @snap_devices: the array of snap devices.
  */
 void __tracer_unverified_snap_to_active(struct snap_device *dev,
                                         const char __user *user_mount_path, snap_device_array_mut snap_devices)
@@ -2313,6 +2328,7 @@ error:
  *                                       and active state.
  * @dev: The &struct snap_device object pointer.
  * @user_mount_path: A userspace supplied path used to build the COW file path.
+ * @snap_devices: the array of snap devices.
  *
  * Tracing is configured for the block device after this call completes.
  */

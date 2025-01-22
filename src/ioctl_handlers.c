@@ -48,6 +48,7 @@ struct mutex ioctl_mutex;
  * * 0: the minor is not in allocated.
  * * 1: the minor is allocated and is not busy.
  * * 2: the minor is allocated whether busy or not.
+ * @snap_devices: the array of snap devices.
  *
  * Return:
  * * 0 - successfully validated.
