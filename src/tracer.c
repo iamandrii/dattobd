@@ -1408,10 +1408,9 @@ static MRF_RETURN_TYPE tracing_fn(struct request_queue *q, struct bio *bio)
 {
         int i, ret = 0;
         struct snap_device *dev = NULL;
-        MAYBE_UNUSED(ret);
         make_request_fn* orig_fn = NULL;
-
         snap_device_array snap_devices = get_snap_device_array_nolock();
+        MAYBE_UNUSED(ret);
 
         smp_rmb();
         tracer_for_each(dev, i)
@@ -1737,7 +1736,7 @@ static void __tracer_setup_tracing_unverified(struct snap_device *dev,
  * * 0 - success
  * * !0 - errno indicating the error
  */
-int __tracer_setup_tracing(struct snap_device *dev, unsigned int minor, snap_device_array_mut snap_devices)
+static int __tracer_setup_tracing(struct snap_device *dev, unsigned int minor, snap_device_array_mut snap_devices)
 {
         int ret = 0;
 

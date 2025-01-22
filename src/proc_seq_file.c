@@ -5,6 +5,7 @@
 #include "module_control.h"
 #include "snap_device.h"
 #include "tracer_helper.h"
+#include "proc_seq_file.h"
 
 static void *dattobd_proc_start(struct seq_file *m, loff_t *pos);
 static void *dattobd_proc_next(struct seq_file *m, void *v, loff_t *pos);
@@ -80,7 +81,7 @@ static void *dattobd_proc_get_idx(loff_t pos)
 {
         if (pos > highest_minor)
                 return NULL;
-        return &current_snap_devices[pos];
+        return (void*)&current_snap_devices[pos];
 }
 
 /**

@@ -8,7 +8,7 @@
  * @minor: the device's minor number.
  * @snap_devices: the array of snap devices.
  */
-void auto_transition_dormant(unsigned int minor, snap_device_array snap_devices)
+static void auto_transition_dormant(unsigned int minor, snap_device_array snap_devices)
 {
         LOG_DEBUG("ENTER %s minor: %d", __func__, minor);
 
@@ -27,7 +27,7 @@ void auto_transition_dormant(unsigned int minor, snap_device_array snap_devices)
  * @dir_name: the user-space supplied directory name of the mount.
  * @snap_devices: the array of snap devices.
  */
-void auto_transition_active(unsigned int minor, const char *dir_name, snap_device_array_mut snap_devices)
+static void auto_transition_active(unsigned int minor, const char *dir_name, snap_device_array_mut snap_devices)
 {
         struct snap_device *dev = snap_devices[minor];
 
@@ -59,7 +59,7 @@ void auto_transition_active(unsigned int minor, const char *dir_name, snap_devic
  * * 0 - success
  * * !0 - errno indicating the error
  */
-int __handle_bdev_mount_nowrite(const struct vfsmount *mnt,
+static int __handle_bdev_mount_nowrite(const struct vfsmount *mnt,
                                 unsigned int *idx_out, snap_device_array snap_devices)
 {
         int ret;
@@ -103,7 +103,7 @@ out:
  * * 0 - success
  * * !0 - errno indicating the error
  */
-int __handle_bdev_mount_writable(const char *dir_name,
+static int __handle_bdev_mount_writable(const char *dir_name,
                                  const struct block_device *bdev,
                                  unsigned int *idx_out, snap_device_array_mut snap_devices)
 {
@@ -258,6 +258,7 @@ void post_umount_check(int dormant_ret, int umount_ret, unsigned int idx,
 {
         struct snap_device *dev;
         struct super_block *sb;
+        snap_device_array_mut snap_devices = get_snap_device_array_mut();
 
         LOG_DEBUG("ENTER %s", __func__);
         // if we didn't do anything or failed, just return
@@ -265,8 +266,6 @@ void post_umount_check(int dormant_ret, int umount_ret, unsigned int idx,
                 LOG_DEBUG("EXIT %s, dormant_ret", __func__);
                 return;
         }
-
-        snap_device_array_mut snap_devices = get_snap_device_array_mut();
 
         dev = snap_devices[idx];
 
