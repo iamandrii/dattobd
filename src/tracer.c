@@ -1172,6 +1172,8 @@ static int __try_freeze_bdev(struct block_device* bdev, struct super_block** sb)
         bdevname(bdev, bdev_name);
 #endif     
         if(origsb){
+                *sb = origsb;
+                sync_filesystem(origsb);
                 dattobd_drop_super(origsb);
 
                 // freeze and sync block device
@@ -1179,50 +1181,30 @@ static int __try_freeze_bdev(struct block_device* bdev, struct super_block** sb)
                 LOG_DEBUG("freezing '%s'", bdev_name);
 #else 
                 LOG_DEBUG("freezing '%pg'", bdev);         
-#endif                
-#ifdef HAVE_FREEZE_SB
-                // #if LINUX_VERSION_CODE < KERNEL_VERSION(5,11,0)
-                *sb = freeze_bdev(bdev);
-                if(!sb){
-#ifdef HAVE_BDEVNAME                          
-                        LOG_ERROR(-EFAULT, "error freezing '%s': null",
-                                  bdev_name);
-#else 
-                        LOG_ERROR(-EFAULT, "error freezing '%pg': null",
-                                  bdev);                                
 #endif 
-                        return -EFAULT;
-                } else if(IS_ERR(sb)){
-#ifdef HAVE_BDEVNAME                          
-                        LOG_ERROR((int)PTR_ERR(sb),
-                                  "error freezing '%s': error", bdev_name);
-#else
-                        LOG_ERROR((int)PTR_ERR(sb),
-                                  "error freezing '%pg': error", bdev);
-#endif
-                        return (int)PTR_ERR(sb);
+
+#ifdef HAVE_FREEZE_SUPER_2
+                if(origsb->s_op->freeze_super){
+                        ret = origsb->s_op->freeze_super(origsb, FREEZE_HOLDER_KERNEL);
+                } else {
+                        ret = freeze_super(origsb, FREEZE_HOLDER_KERNEL);
                 }
-#elif defined HAVE_BDEV_FREEZE
-                ret = bdev_freeze(bdev);
-                if (ret) {
-#ifdef HAVE_BDEVNAME                          
+#else
+#ifdef HAVE_FREEZE_SUPER_PTR
+ 		if (origsb->s_op->freeze_super)
+ 			ret = origsb->s_op->freeze_super(origsb);
+ 		else
+#endif // HAVE_FREEZE_SUPER_PTR
+                        ret = freeze_super(origsb);                
+#endif // HAVE_FREEZE_SUPER_2
+                if(ret){
+#ifdef HAVE_BDEVNAME  
                         LOG_ERROR(ret, "error freezing '%s'", bdev_name);
 #else
                         LOG_ERROR(ret, "error freezing '%pg'", bdev);
-#endif                        
-                        return ret;
-                }
-#else
-                ret = freeze_bdev(bdev);
-                if (ret) {
-#ifdef HAVE_BDEVNAME                          
-                        LOG_ERROR(ret, "error freezing '%s'", bdev_name);
-#else
-                        LOG_ERROR(ret, "error freezing '%pg'", bdev);
-#endif                        
-                        return ret;
-                }
 #endif
+                        return ret;
+                }
         }
         else {
 #ifdef HAVE_BDEVNAME  
@@ -1250,13 +1232,20 @@ static int __try_thaw_bdev(struct block_device* bdev, struct super_block* sb){
 #else
         LOG_DEBUG("thawing '%pg'", bdev);
 #endif                
-#ifdef HAVE_THAW_BDEV_INT
-        ret = thaw_bdev(bdev, sb);
-#elif defined HAVE_BDEV_THAW
-        ret = bdev_thaw(bdev);
-#else
-        ret = thaw_bdev(bdev);
-#endif
+#ifdef HAVE_FREEZE_SUPER_2
+        if (sb->s_op->thaw_super)
+                ret = sb->s_op->thaw_super(sb, FREEZE_HOLDER_KERNEL);
+        else
+                ret = thaw_super(sb, FREEZE_HOLDER_KERNEL);
+#else // HAVE_FREEZE_SUPER_2
+#ifdef HAVE_FREEZE_SUPER_PTR
+        if (sb->s_op->thaw_super)
+                ret = sb->s_op->thaw_super(sb);
+        else
+#endif // HAVE_FREEZE_SUPER_PTR
+                ret = thaw_super(sb);
+#endif // HAVE_FREEZE_SUPER_2
+
         if(ret){
 #ifdef HAVE_BEDVNAME  
                 LOG_ERROR(ret, "error thawing '%s'", bdev_name);
