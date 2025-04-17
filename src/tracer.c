@@ -1173,7 +1173,6 @@ static int __try_freeze_bdev(struct block_device* bdev, struct super_block** sb)
 #endif     
         if(origsb){
                 *sb = origsb;
-                sync_filesystem(origsb);
                 dattobd_drop_super(origsb);
 
                 // freeze and sync block device
